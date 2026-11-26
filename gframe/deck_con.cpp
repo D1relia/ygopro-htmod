@@ -1371,6 +1371,10 @@ void DeckBuilder::GetHoveredCard() {
 			if(row > L.rows - 1) row = L.rows - 1;
 			hovered_pos = 1;
 			hovered_seq = row * L.lx + col;
+			if(hovered_seq >= mainsize && row > 0 && my <= L.top + (float)(row - 1) * L.dy + L.ch) {
+				row -= 1;
+				hovered_seq = row * L.lx + col;
+			}
 			if(hovered_seq < 0 || hovered_seq >= mainsize) {
 				hovered_seq = -1;
 				hovered_code = 0;
