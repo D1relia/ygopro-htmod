@@ -131,6 +131,7 @@ struct Config {
 	int ask_mset{ 0 };
 	// custom mod: resolution & camera
 	int resolution_preset{ 720 };
+	bool modern_ui{ true };
 	float cam_x{ 4.2f };
 	float cam_y{ 9.2f };
 	float cam_z{ 5.8f };
