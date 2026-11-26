@@ -362,9 +362,29 @@ jobs:
         run: |
           MSBuild.exe build\YGOPro.sln /m /p:Configuration=Release /p:Platform=x64
 
+      - name: Build Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $issPath = (Resolve-Path "installer\HTmod-Setup.iss").Path
+          $content = [System.IO.File]::ReadAllText($issPath, [System.Text.UTF8Encoding]::new($false))
+          [System.IO.File]::WriteAllText($issPath, $content, [System.Text.UTF8Encoding]::new($true))
+
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc $issPath
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
           name: YGOPro-windows-x64
           path: bin/release/x64/YGOPro.exe
+          if-no-files-found: error
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: KoishiPro-HTmod-Setup
+          path: bin/installer/KoishiPro-HTmod-Setup.exe
           if-no-files-found: error
