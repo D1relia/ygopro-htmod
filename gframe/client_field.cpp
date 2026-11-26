@@ -825,27 +825,32 @@ void ClientField::GetCardLocation(ClientCard* pcard, irr::core::vector3df* t, ir
 		}
 		break;
 	}
-	case 0:
+case 0:
 	case LOCATION_HAND: {
 		int count = hand[controler].size();
+		float cam_dy = mainGame->gameConf.cam_y - mainGame->gameConf.cam_look_y;
+		float cam_dz = mainGame->gameConf.cam_z - mainGame->gameConf.cam_look_z;
+		float hand_angle = atan2f(cam_dy, cam_dz);
+		float hover_dy = 0.223f * cosf(hand_angle);
+		float hover_dz = 0.223f * sinf(hand_angle);
 		if (controler == 0) {
 			if (count <= 6)
 				t->X = (5.5f - 0.8f * count) / 2 + 1.55f + sequence * 0.8f;
 			else
 				t->X = 1.9f + sequence * 4.0f / (count - 1);
 			if (pcard->is_hovered) {
-				t->Y = 3.84f;
-				t->Z = 0.656f + 0.001f * sequence;
+				t->Y = 4.0f - hover_dy;
+				t->Z = 0.5f + hover_dz + 0.001f * sequence;
 			} else {
 				t->Y = 4.0f;
 				t->Z = 0.5f + 0.001f * sequence;
 			}
 			if(pcard->code) {
-				r->X = -0.798056f;
+				r->X = -hand_angle;
 				r->Y = 0.0f;
 				r->Z = 0.0f;
 			} else {
-				r->X = 0.798056f;
+				r->X = hand_angle;
 				r->Y = 3.1415926f;
 				r->Z = 0;
 			}
@@ -855,18 +860,18 @@ void ClientField::GetCardLocation(ClientCard* pcard, irr::core::vector3df* t, ir
 			else
 				t->X = 5.9f - sequence * 4.0f / (count - 1);
 			if (pcard->is_hovered) {
-				t->Y = -3.56f;
-				t->Z = 0.656f - 0.001f * sequence;
+				t->Y = -3.4f - hover_dy;
+				t->Z = 0.5f + hover_dz - 0.001f * sequence;
 			} else {
 				t->Y = -3.4f;
 				t->Z = 0.5f - 0.001f * sequence;
 			}
 			if (pcard->code == 0) {
-				r->X = 0.798056f;
+				r->X = hand_angle;
 				r->Y = 3.1415926f;
 				r->Z = 0;
 			} else {
-				r->X = -0.798056f;
+				r->X = -hand_angle;
 				r->Y = 0;
 				r->Z = 0;
 			}
