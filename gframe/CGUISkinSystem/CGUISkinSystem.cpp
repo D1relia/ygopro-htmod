@@ -523,6 +523,50 @@ void CModernLightSkin::draw3DButtonPaneStandard(IGUIElement* element, const core
 	sh.LowerRightCorner.Y += 1;
 	drawRoundedBox(sh, rad, video::SColor(45, 2, 6, 16), video::SColor(0, 0, 0, 0), clip, true);
 
+	s32 elemId = element ? element->getID() : -1;
+	if(elemId >= 240 && elemId <= 249) {
+		video::SColor accent(255, 148, 163, 184);
+		video::SColor bgNorm(244, 24, 32, 46);
+		video::SColor bgHov(252, 40, 52, 74);
+		switch(elemId) {
+		case 240: // 发动
+			accent = video::SColor(255, 245, 158, 11);
+			bgNorm = video::SColor(244, 48, 36, 18);
+			bgHov  = video::SColor(252, 82, 56, 18);
+			break;
+		case 241: // 通常召唤
+			accent = video::SColor(255, 56, 189, 248);
+			bgNorm = video::SColor(244, 18, 38, 56);
+			bgHov  = video::SColor(252, 22, 62, 92);
+			break;
+		case 242: // 特殊召唤
+			accent = video::SColor(255, 129, 140, 248);
+			bgNorm = video::SColor(244, 28, 30, 60);
+			bgHov  = video::SColor(252, 46, 48, 98);
+			break;
+		case 243: // 盖放怪兽
+		case 244: // 盖放魔陷
+			accent = video::SColor(255, 52, 211, 153);
+			bgNorm = video::SColor(244, 16, 42, 36);
+			bgHov  = video::SColor(252, 22, 68, 56);
+			break;
+		case 245: // 变更表示形式
+			accent = video::SColor(255, 192, 132, 252);
+			bgNorm = video::SColor(244, 38, 26, 56);
+			bgHov  = video::SColor(252, 62, 38, 92);
+			break;
+		case 246: // 攻击宣言
+			accent = video::SColor(255, 248, 113, 113);
+			bgNorm = video::SColor(244, 54, 22, 26);
+			bgHov  = video::SColor(252, 92, 30, 34);
+			break;
+		}
+		drawRoundedBox(r, rad, hov ? bgHov : bgNorm, accent, clip, true);
+		core::rect<s32> inner(r.UpperLeftCorner.X + 1, r.UpperLeftCorner.Y + 1, r.LowerRightCorner.X - 1, r.LowerRightCorner.Y - 1);
+		drawRoundedBox(inner, std::max<s32>(2, rad - 1), video::SColor(0, 0, 0, 0), video::SColor(hov ? 220 : 150, accent.getRed(), accent.getGreen(), accent.getBlue()), clip, false);
+		return;
+	}
+
 	if(hov) {
 		drawRoundedBox(r, rad, video::SColor(250, 30, 56, 92), video::SColor(255, 10, 132, 255), clip, true);
 	} else {
@@ -670,7 +714,7 @@ void CModernLightSkin::drawIcon(IGUIElement* element, EGUI_DEFAULT_ICON icon, co
 void CModernLightSkin::draw2DRectangle(IGUIElement* element, const video::SColor& color, const core::rect<s32>& pos, const core::rect<s32>* clip) {
 	if(element && element->getType() == EGUIET_STATIC_TEXT) {
 		drawSoftShadow(pos, 10, clip);
-		drawRoundedBox(pos, 10, video::SColor(238, 24, 32, 46), video::SColor(0, 0, 0, 0), clip, true);
+		drawRoundedBox(pos, 8, video::SColor(244, 22, 30, 46), video::SColor(220, 71, 85, 105), clip, true);
 		return;
 	}
 	VideoDriver->draw2DRectangle(color, pos, clip);
