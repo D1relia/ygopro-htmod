@@ -307,3 +307,258 @@ CGUISkinSystem::~CGUISkinSystem() {
 
 	
 }
+#include <IGUICheckBox.h>
+#include <ICursorControl.h>
+
+namespace irr {
+namespace gui {
+
+CModernLightSkin::CModernLightSkin(IrrlichtDevice* device, IGUISkin* fallbackSkin)
+	: Device(device), VideoDriver(device->getVideoDriver()), FallbackSkin(fallbackSkin) {
+	if(FallbackSkin)
+		FallbackSkin->grab();
+	setColor(EGDC_3D_DARK_SHADOW,      video::SColor(255, 148, 163, 184));
+	setColor(EGDC_3D_SHADOW,           video::SColor(255, 203, 213, 225));
+	setColor(EGDC_3D_FACE,             video::SColor(242, 255, 255, 255));
+	setColor(EGDC_3D_HIGH_LIGHT,       video::SColor(255, 255, 255, 255));
+	setColor(EGDC_3D_LIGHT,            video::SColor(255, 241, 245, 249));
+	setColor(EGDC_ACTIVE_BORDER,       video::SColor(255, 203, 213, 225));
+	setColor(EGDC_INACTIVE_BORDER,     video::SColor(220, 203, 213, 225));
+	setColor(EGDC_ACTIVE_CAPTION,      video::SColor(255,  15,  23,  42));
+	setColor(EGDC_INACTIVE_CAPTION,    video::SColor(255, 100, 116, 139));
+	setColor(EGDC_APP_WORKSPACE,       video::SColor(224, 248, 250, 252));
+	setColor(EGDC_WINDOW,              video::SColor(224, 248, 250, 252));
+	setColor(EGDC_BUTTON_TEXT,         video::SColor(255,  30,  41,  59));
+	setColor(EGDC_GRAY_TEXT,           video::SColor(255, 148, 163, 184));
+	setColor(EGDC_HIGH_LIGHT,          video::SColor(255,   0, 122, 255));
+	setColor(EGDC_HIGH_LIGHT_TEXT,     video::SColor(255, 255, 255, 255));
+	setColor(EGDC_TOOLTIP,             video::SColor(255,  15,  23,  42));
+	setColor(EGDC_TOOLTIP_BACKGROUND,  video::SColor(248, 255, 255, 255));
+	setColor(EGDC_SCROLLBAR,           video::SColor(100, 203, 213, 225));
+	setColor(EGDC_WINDOW_SYMBOL,       video::SColor(255,  51,  65,  85));
+	setColor(EGDC_ICON,                video::SColor(255,  51,  65,  85));
+	setColor(EGDC_ICON_HIGH_LIGHT,     video::SColor(255, 255, 255, 255));
+	setSize(EGDS_TITLEBARTEXT_DISTANCE_X, 10);
+	setSize(EGDS_TITLEBARTEXT_DISTANCE_Y, 2);
+}
+
+CModernLightSkin::~CModernLightSkin() {
+	if(FallbackSkin)
+		FallbackSkin->drop();
+}
+
+video::SColor CModernLightSkin::getColor(EGUI_DEFAULT_COLOR color) const { return FallbackSkin->getColor(color); }
+void CModernLightSkin::setColor(EGUI_DEFAULT_COLOR which, video::SColor newColor) { FallbackSkin->setColor(which, newColor); }
+s32 CModernLightSkin::getSize(EGUI_DEFAULT_SIZE size) const { return FallbackSkin->getSize(size); }
+const wchar_t* CModernLightSkin::getDefaultText(EGUI_DEFAULT_TEXT text) const { return FallbackSkin->getDefaultText(text); }
+void CModernLightSkin::setDefaultText(EGUI_DEFAULT_TEXT which, const wchar_t* newText) { FallbackSkin->setDefaultText(which, newText); }
+void CModernLightSkin::setSize(EGUI_DEFAULT_SIZE which, s32 size) { FallbackSkin->setSize(which, size); }
+IGUIFont* CModernLightSkin::getFont(EGUI_DEFAULT_FONT defaultFont) const { return FallbackSkin->getFont(defaultFont); }
+void CModernLightSkin::setFont(IGUIFont* font, EGUI_DEFAULT_FONT defaultFont) { FallbackSkin->setFont(font, defaultFont); }
+IGUISpriteBank* CModernLightSkin::getSpriteBank() const { return FallbackSkin->getSpriteBank(); }
+void CModernLightSkin::setSpriteBank(IGUISpriteBank* bank) { FallbackSkin->setSpriteBank(bank); }
+u32 CModernLightSkin::getIcon(EGUI_DEFAULT_ICON icon) const { return FallbackSkin->getIcon(icon); }
+void CModernLightSkin::setIcon(EGUI_DEFAULT_ICON icon, u32 index) { FallbackSkin->setIcon(icon, index); }
+
+bool CModernLightSkin::isHovered(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) const {
+	if(!element || !element->isEnabled() || !Device || !Device->getCursorControl())
+		return false;
+	core::position2di mp = Device->getCursorControl()->getPosition();
+	if(!rect.isPointInside(mp))
+		return false;
+	if(clip && !clip->isPointInside(mp))
+		return false;
+	return true;
+}
+
+void CModernLightSkin::drawSoftBox(const core::rect<s32>& r, video::SColor fill, video::SColor border, const core::rect<s32>* clip, bool fillBg) const {
+	s32 w = r.getWidth();
+	s32 h = r.getHeight();
+	if(w <= 0 || h <= 0)
+		return;
+	if(w < 4 || h < 4) {
+		if(fillBg)
+			VideoDriver->draw2DRectangle(fill, r, clip);
+		return;
+	}
+	if(fillBg) {
+		VideoDriver->draw2DRectangle(fill, core::rect<s32>(r.UpperLeftCorner.X + 1, r.UpperLeftCorner.Y + 1, r.LowerRightCorner.X - 1, r.LowerRightCorner.Y - 1), clip);
+	}
+	if(border.getAlpha() > 0) {
+		VideoDriver->draw2DRectangle(border, core::rect<s32>(r.UpperLeftCorner.X + 1, r.UpperLeftCorner.Y, r.LowerRightCorner.X - 1, r.UpperLeftCorner.Y + 1), clip);
+		VideoDriver->draw2DRectangle(border, core::rect<s32>(r.UpperLeftCorner.X + 1, r.LowerRightCorner.Y - 1, r.LowerRightCorner.X - 1, r.LowerRightCorner.Y), clip);
+		VideoDriver->draw2DRectangle(border, core::rect<s32>(r.UpperLeftCorner.X, r.UpperLeftCorner.Y + 1, r.UpperLeftCorner.X + 1, r.LowerRightCorner.Y - 1), clip);
+		VideoDriver->draw2DRectangle(border, core::rect<s32>(r.LowerRightCorner.X - 1, r.UpperLeftCorner.Y + 1, r.LowerRightCorner.X, r.LowerRightCorner.Y - 1), clip);
+	}
+}
+
+void CModernLightSkin::draw3DButtonPaneStandard(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) {
+	bool hov = isHovered(element, rect, clip);
+	if(element && element->getType() == EGUIET_SCROLL_BAR) {
+		core::rect<s32> thumb = rect;
+		s32 pad = (rect.getWidth() > rect.getHeight()) ? (rect.getHeight() >= 10 ? 2 : 1) : (rect.getWidth() >= 10 ? 2 : 1);
+		if(rect.getWidth() > rect.getHeight()) {
+			thumb.UpperLeftCorner.Y += pad;
+			thumb.LowerRightCorner.Y -= pad;
+		} else {
+			thumb.UpperLeftCorner.X += pad;
+			thumb.LowerRightCorner.X -= pad;
+		}
+		video::SColor col = hov ? video::SColor(235, 100, 116, 139) : video::SColor(195, 148, 163, 184);
+		drawSoftBox(thumb, col, col, clip, true);
+		return;
+	}
+	if(element && element->isSubElement() && element->getParent()) {
+		auto ptype = element->getParent()->getType();
+		if(ptype == EGUIET_SCROLL_BAR) {
+			video::SColor bg = hov ? video::SColor(210, 226, 232, 240) : video::SColor(120, 241, 245, 249);
+			VideoDriver->draw2DRectangle(bg, rect, clip);
+			return;
+		}
+		if(ptype == EGUIET_COMBO_BOX) {
+			video::SColor bg = hov ? video::SColor(245, 239, 246, 255) : video::SColor(235, 248, 250, 252);
+			VideoDriver->draw2DRectangle(bg, rect, clip);
+			VideoDriver->draw2DRectangle(video::SColor(255, 226, 232, 240), core::rect<s32>(rect.UpperLeftCorner.X, rect.UpperLeftCorner.Y + 2, rect.UpperLeftCorner.X + 1, rect.LowerRightCorner.Y - 2), clip);
+			return;
+		}
+		if(ptype == EGUIET_WINDOW) {
+			video::SColor bg = hov ? video::SColor(245, 254, 226, 226) : video::SColor(0, 0, 0, 0);
+			video::SColor bd = hov ? video::SColor(255, 248, 113, 113) : video::SColor(0, 0, 0, 0);
+			drawSoftBox(rect, bg, bd, clip, hov);
+			return;
+		}
+	}
+	if(element && !element->isEnabled()) {
+		drawSoftBox(rect, video::SColor(185, 241, 245, 249), video::SColor(200, 226, 232, 240), clip, true);
+		return;
+	}
+	if(hov) {
+		drawSoftBox(rect, video::SColor(250, 239, 246, 255), video::SColor(255, 0, 122, 255), clip, true);
+	} else {
+		drawSoftBox(rect, video::SColor(242, 255, 255, 255), video::SColor(255, 203, 213, 225), clip, true);
+	}
+}
+
+void CModernLightSkin::draw3DButtonPanePressed(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) {
+	if(element && element->getType() == EGUIET_SCROLL_BAR) {
+		drawSoftBox(rect, video::SColor(245, 71, 85, 105), video::SColor(245, 71, 85, 105), clip, true);
+		return;
+	}
+	drawSoftBox(rect, video::SColor(252, 219, 234, 254), video::SColor(255, 0, 102, 214), clip, true);
+}
+
+void CModernLightSkin::draw3DSunkenPane(IGUIElement* element, video::SColor bgcolor, bool flat, bool fillBackGround, const core::rect<s32>& rect, const core::rect<s32>* clip) {
+	bool hov = isHovered(element, rect, clip);
+	bool focused = (element && Device && Device->getGUIEnvironment() && Device->getGUIEnvironment()->hasFocus(element));
+	if(element && element->getType() == EGUIET_CHECK_BOX) {
+		bool checked = static_cast<IGUICheckBox*>(element)->isChecked();
+		if(checked) {
+			video::SColor blue = hov ? video::SColor(255, 0, 102, 214) : video::SColor(255, 0, 122, 255);
+			drawSoftBox(rect, blue, blue, clip, true);
+		} else {
+			video::SColor bd = hov ? video::SColor(255, 0, 122, 255) : video::SColor(255, 148, 163, 184);
+			drawSoftBox(rect, video::SColor(250, 255, 255, 255), bd, clip, true);
+		}
+		return;
+	}
+	if(element && element->getType() == EGUIET_STATIC_TEXT) {
+		video::SColor bg = fillBackGround ? video::SColor(235, 255, 255, 255) : video::SColor(180, 241, 245, 249);
+		drawSoftBox(rect, bg, video::SColor(235, 203, 213, 225), clip, true);
+		return;
+	}
+	video::SColor fill = (element && !element->isEnabled())
+		? video::SColor(210, 241, 245, 249)
+		: video::SColor(248, 255, 255, 255);
+	video::SColor border = focused
+		? video::SColor(255, 0, 122, 255)
+		: (hov ? video::SColor(255, 148, 163, 184) : video::SColor(255, 203, 213, 225));
+	drawSoftBox(rect, fill, border, clip, fillBackGround);
+}
+
+core::rect<s32> CModernLightSkin::draw3DWindowBackground(IGUIElement* element, bool drawTitleBar, video::SColor titleBarColor, const core::rect<s32>& rect, const core::rect<s32>* clip, core::rect<s32>* checkClientArea) {
+	s32 barH = getSize(EGDS_WINDOW_BUTTON_WIDTH) + 6;
+	if(checkClientArea) {
+		*checkClientArea = rect;
+		checkClientArea->UpperLeftCorner.X += 1;
+		checkClientArea->LowerRightCorner.X -= 1;
+		checkClientArea->LowerRightCorner.Y -= 1;
+		if(drawTitleBar)
+			checkClientArea->UpperLeftCorner.Y += barH + 1;
+		else
+			checkClientArea->UpperLeftCorner.Y += 1;
+		return *checkClientArea;
+	}
+	drawSoftBox(rect, video::SColor(224, 248, 250, 252), video::SColor(245, 203, 213, 225), clip, true);
+	core::rect<s32> titleRect = rect;
+	if(drawTitleBar) {
+		core::rect<s32> barBg(rect.UpperLeftCorner.X + 1, rect.UpperLeftCorner.Y + 1, rect.LowerRightCorner.X - 1, rect.UpperLeftCorner.Y + barH);
+		VideoDriver->draw2DRectangle(video::SColor(242, 241, 245, 249), barBg, clip);
+		VideoDriver->draw2DRectangle(video::SColor(255, 203, 213, 225), core::rect<s32>(rect.UpperLeftCorner.X + 1, rect.UpperLeftCorner.Y + barH, rect.LowerRightCorner.X - 1, rect.UpperLeftCorner.Y + barH + 1), clip);
+		titleRect.UpperLeftCorner.X += 6;
+		titleRect.UpperLeftCorner.Y += 1;
+		titleRect.LowerRightCorner.X -= 4;
+		titleRect.LowerRightCorner.Y = rect.UpperLeftCorner.Y + barH;
+	}
+	return titleRect;
+}
+
+void CModernLightSkin::draw3DMenuPane(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) {
+	drawSoftBox(rect, video::SColor(250, 255, 255, 255), video::SColor(255, 203, 213, 225), clip, true);
+}
+
+void CModernLightSkin::draw3DToolBar(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) {
+	drawSoftBox(rect, video::SColor(235, 248, 250, 252), video::SColor(255, 203, 213, 225), clip, true);
+}
+
+void CModernLightSkin::draw3DTabButton(IGUIElement* element, bool active, const core::rect<s32>& rect, const core::rect<s32>* clip, EGUI_ALIGNMENT alignment) {
+	bool hov = isHovered(element, rect, clip);
+	if(active) {
+		VideoDriver->draw2DRectangle(video::SColor(245, 255, 255, 255), core::rect<s32>(rect.UpperLeftCorner.X + 1, rect.UpperLeftCorner.Y + 2, rect.LowerRightCorner.X - 1, rect.LowerRightCorner.Y), clip);
+		VideoDriver->draw2DRectangle(video::SColor(255, 203, 213, 225), core::rect<s32>(rect.UpperLeftCorner.X, rect.UpperLeftCorner.Y + 1, rect.UpperLeftCorner.X + 1, rect.LowerRightCorner.Y), clip);
+		VideoDriver->draw2DRectangle(video::SColor(255, 203, 213, 225), core::rect<s32>(rect.LowerRightCorner.X - 1, rect.UpperLeftCorner.Y + 1, rect.LowerRightCorner.X, rect.LowerRightCorner.Y), clip);
+		if(alignment == EGUIA_UPPERLEFT)
+			VideoDriver->draw2DRectangle(video::SColor(255, 0, 122, 255), core::rect<s32>(rect.UpperLeftCorner.X, rect.UpperLeftCorner.Y, rect.LowerRightCorner.X, rect.UpperLeftCorner.Y + 2), clip);
+		else
+			VideoDriver->draw2DRectangle(video::SColor(255, 0, 122, 255), core::rect<s32>(rect.UpperLeftCorner.X, rect.LowerRightCorner.Y - 2, rect.LowerRightCorner.X, rect.LowerRightCorner.Y), clip);
+	} else {
+		video::SColor bg = hov ? video::SColor(232, 241, 245, 249) : video::SColor(188, 226, 232, 240);
+		drawSoftBox(rect, bg, video::SColor(180, 203, 213, 225), clip, true);
+	}
+}
+
+void CModernLightSkin::draw3DTabBody(IGUIElement* element, bool border, bool background, const core::rect<s32>& rect, const core::rect<s32>* clip, s32 tabHeight, gui::EGUI_ALIGNMENT alignment) {
+	core::rect<s32> body = rect;
+	if(tabHeight == -1)
+		tabHeight = getSize(EGDS_BUTTON_HEIGHT);
+	if(alignment == EGUIA_UPPERLEFT)
+		body.UpperLeftCorner.Y += tabHeight;
+	else
+		body.LowerRightCorner.Y -= tabHeight;
+	drawSoftBox(body, video::SColor(224, 248, 250, 252), border ? video::SColor(245, 203, 213, 225) : video::SColor(0, 0, 0, 0), clip, background);
+}
+
+void CModernLightSkin::drawIcon(IGUIElement* element, EGUI_DEFAULT_ICON icon, const core::position2di position, u32 starttime, u32 currenttime, bool loop, const core::rect<s32>* clip) {
+	if(icon == EGDI_CHECK_BOX_CHECKED) {
+		if(clip && !clip->isPointInside(position))
+			return;
+		s32 s = getSize(EGDS_CHECK_BOX_WIDTH) / 4;
+		if(s < 3) s = 3;
+		core::position2di p1(position.X - s, position.Y);
+		core::position2di p2(position.X - s / 3, position.Y + s - 1);
+		core::position2di p3(position.X + s + 1, position.Y - s + 1);
+		video::SColor white(255, 255, 255, 255);
+		VideoDriver->draw2DLine(p1, p2, white);
+		VideoDriver->draw2DLine(p2, p3, white);
+		VideoDriver->draw2DLine(core::position2di(p1.X, p1.Y - 1), core::position2di(p2.X, p2.Y - 1), white);
+		VideoDriver->draw2DLine(core::position2di(p2.X, p2.Y - 1), core::position2di(p3.X, p3.Y - 1), white);
+		return;
+	}
+	FallbackSkin->drawIcon(element, icon, position, starttime, currenttime, loop, clip);
+}
+
+void CModernLightSkin::draw2DRectangle(IGUIElement* element, const video::SColor& color, const core::rect<s32>& pos, const core::rect<s32>* clip) {
+	VideoDriver->draw2DRectangle(color, pos, clip);
+}
+
+}
+}
