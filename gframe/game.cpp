@@ -130,7 +130,11 @@ bool Game::Initialize() {
 		return false;
 	}
 	// Apply skin
-	if(gameConf.skin_index) {
+	if(gameConf.modern_ui) {
+		auto* modernSkin = new irr::gui::CModernLightSkin(device, device->getGUIEnvironment()->getSkin());
+		device->getGUIEnvironment()->setSkin(modernSkin);
+		modernSkin->drop();
+	} else if(gameConf.skin_index) {
 		wchar_t skin_dir[16];
 		myswprintf(skin_dir, L"skin");
 		skinSystem = new CGUISkinSystem(skin_dir, device);
@@ -1141,10 +1145,12 @@ bool Game::Initialize() {
 	SwapYesNoButtons(gameConf.swap_yes_no_button);
 	env->getSkin()->setFont(guiFont);
 	env->setFocus(wMainMenu);
-	for (int i = 0; i < irr::gui::EGDC_COUNT; ++i) {
-		auto col = env->getSkin()->getColor((irr::gui::EGUI_DEFAULT_COLOR)i);
-		col.setAlpha(224);
-		env->getSkin()->setColor((irr::gui::EGUI_DEFAULT_COLOR)i, col);
+	if(!gameConf.modern_ui) {
+		for (int i = 0; i < irr::gui::EGDC_COUNT; ++i) {
+			auto col = env->getSkin()->getColor((irr::gui::EGUI_DEFAULT_COLOR)i);
+			col.setAlpha(224);
+			env->getSkin()->setColor((irr::gui::EGUI_DEFAULT_COLOR)i, col);
+		}
 	}
 	for (auto ptr : editbox_list)
 		ptr->setMax(LEN_CHAT_MSG - 1);
@@ -2056,6 +2062,8 @@ bool Game::LoadConfigFromFile(const char* file) {
 			gameConf.skin_index = atoi(valbuf);
 		} else if (!std::strcmp(strbuf, "resolution_preset")) {
 			gameConf.resolution_preset = std::strtol(valbuf, nullptr, 10);
+		} else if (!std::strcmp(strbuf, "modern_ui")) {
+			gameConf.modern_ui = std::strtol(valbuf, nullptr, 10) > 0;
 		} else if (!std::strcmp(strbuf, "cam_x")) {
 			gameConf.cam_x = std::strtof(valbuf, nullptr);
 		} else if (!std::strcmp(strbuf, "cam_y")) {
@@ -2285,6 +2293,7 @@ void Game::SaveConfig() {
 	std::fprintf(fp, "enable_pendulum_scale = %d\n", ((mainGame->chkEnablePScale->isChecked()) ? 1 : 0));
 	std::fprintf(fp, "skin_index = %d\n", gameConf.skin_index);
 	std::fprintf(fp, "resolution_preset = %d\n", gameConf.resolution_preset);
+	std::fprintf(fp, "modern_ui = %d\n", gameConf.modern_ui ? 1 : 0);
 	std::fprintf(fp, "cam_x = %.3f\n", gameConf.cam_x);
 	std::fprintf(fp, "cam_y = %.3f\n", gameConf.cam_y);
 	std::fprintf(fp, "cam_z = %.3f\n", gameConf.cam_z);
