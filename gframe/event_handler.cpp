@@ -2110,71 +2110,106 @@ bool ClientField::OnCommonEvent(const irr::SEvent& event) {
 	return false;
 }
 void ClientField::GetHoverField(int x, int y) {
-	irr::core::recti sfRect(430, 504, 875, 600);
-	irr::core::recti ofRect(531, 135, 800, 191);
-	irr::core::vector2di pos(x, y);
 	int rule = (mainGame->dInfo.duel_rule >= 4) ? 1 : 0;
-	if(sfRect.isPointInside(pos)) {
-		int hc = hand[0].size();
-		int cardSize = 66;
-		int cardSpace = 10;
-		if(hc == 0)
-			hovered_location = 0;
-		else if(hc < 7) {
-			int left = sfRect.UpperLeftCorner.X + (cardSize + cardSpace) * (6 - hc) / 2;
-			if(x < left)
-				hovered_location = 0;
-			else {
-				int seq = (x - left) / (cardSize + cardSpace);
-				if(seq >= hc) seq = hc - 1;
-				if(x - left - (cardSize + cardSpace) * seq < cardSize) {
-					hovered_controler = 0;
-					hovered_location = LOCATION_HAND;
-					hovered_sequence = seq;
-				} else hovered_location = 0;
+	irr::scene::ICameraSceneNode* cam = mainGame->smgr ? mainGame->smgr->getActiveCamera() : nullptr;
+	if(!cam) {
+		hovered_location = 0;
+		return;
+	}
+	const irr::core::matrix4& viewMat = cam->getViewMatrix();
+	const irr::core::matrix4& projMat = cam->getProjectionMatrix();
+
+	auto ProjectPoint = [&](const irr::core::vector3df& wp, float& vx, float& vy) -> bool {
+		irr::core::vector3df vp;
+		viewMat.transformVect(vp, wp);
+		irr::f32 cx = vp.X * projMat[0] + vp.Y * projMat[4] + vp.Z * projMat[8] + projMat[12];
+		irr::f32 cy = vp.X * projMat[1] + vp.Y * projMat[5] + vp.Z * projMat[9] + projMat[13];
+		irr::f32 cw = vp.X * projMat[3] + vp.Y * projMat[7] + vp.Z * projMat[11] + projMat[15];
+		if(cw <= 0.0001f)
+			return false;
+		vx = (cx / cw * 0.5f + 0.5f) * GAME_WINDOW_WIDTH;
+		vy = (0.5f - cy / cw * 0.5f) * GAME_WINDOW_HEIGHT;
+		return true;
+	};
+
+	auto HitTestHandCard = [&](ClientCard* pcard, int p, int idx) -> bool {
+		float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
+		auto expandByMat = [&](const irr::core::matrix4& mat) {
+			for(int k = 0; k < 4; ++k) {
+				irr::core::vector3df wp = matManager.vCardFront[k].Pos;
+				mat.transformVect(wp);
+				float vx, vy;
+				if(ProjectPoint(wp, vx, vy)) {
+					if(vx < minX) minX = vx;
+					if(vx > maxX) maxX = vx;
+					if(vy < minY) minY = vy;
+					if(vy > maxY) maxY = vy;
+				}
 			}
-		} else {
+		};
+		expandByMat(pcard->mTransform);
+		if(pcard->is_hovered) {
+			irr::core::matrix4 restMat = pcard->mTransform;
+			restMat.setTranslation(irr::core::vector3df(
+				pcard->curPos.X,
+				p == 0 ? 4.0f : -3.4f,
+				0.5f + (p == 0 ? 0.001f : -0.001f) * idx));
+			expandByMat(restMat);
+		}
+		return (minX <= maxX && x >= minX && x <= maxX && y >= minY && y <= maxY);
+	};
+
+	// 1. 优先精确检测双方手牌（按视觉叠放顺序从最上层开始检测）
+	for(int i = (int)hand[0].size() - 1; i >= 0; --i) {
+		if(HitTestHandCard(hand[0][i], 0, i)) {
 			hovered_controler = 0;
 			hovered_location = LOCATION_HAND;
-			if(x >= sfRect.UpperLeftCorner.X + (cardSize + cardSpace) * 5)
-				hovered_sequence = hc - 1;
-			else
-				hovered_sequence = (x - sfRect.UpperLeftCorner.X) * (hc - 1) / ((cardSize + cardSpace) * 5);
+			hovered_sequence = i;
+			return;
 		}
-	} else if(ofRect.isPointInside(pos)) {
-		int hc = hand[1].size();
-		int cardSize = 39;
-		int cardSpace = 7;
-		if(hc == 0)
-			hovered_location = 0;
-		else if(hc < 7) {
-			int left = ofRect.UpperLeftCorner.X + (cardSize + cardSpace) * (6 - hc) / 2;
-			if(x < left)
-				hovered_location = 0;
-			else {
-				int seq = (x - left) / (cardSize + cardSpace);
-				if(seq >= hc) seq = hc - 1;
-				if(x - left - (cardSize + cardSpace) * seq < cardSize) {
-					hovered_controler = 1;
-					hovered_location = LOCATION_HAND;
-					hovered_sequence = hc - 1 - seq;
-				} else hovered_location = 0;
-			}
-		} else {
+	}
+	for(int i = 0; i < (int)hand[1].size(); ++i) {
+		if(HitTestHandCard(hand[1][i], 1, i)) {
 			hovered_controler = 1;
 			hovered_location = LOCATION_HAND;
-			if(x >= ofRect.UpperLeftCorner.X + (cardSize + cardSpace) * 5)
-				hovered_sequence = 0;
-			else
-				hovered_sequence = hc - 1 - (x - ofRect.UpperLeftCorner.X) * (hc - 1) / ((cardSize + cardSpace) * 5);
+			hovered_sequence = i;
+			return;
 		}
-	} else {
-		double screenx = x / static_cast<double>(GAME_WINDOW_WIDTH) * 1.35 - 0.90;
-		double screeny = y / static_cast<double>(GAME_WINDOW_HEIGHT) * 0.84 - 0.42;
-		double angle = 0.798056 - atan(screeny);	//0.798056 = arctan(8.0/7.8)
-		double vlen = sqrt(1.0 + screeny * screeny);
-		double boardx = 4.2 + 7.8 * screenx / vlen / cos(angle);
-		double boardy = 8.0 - 7.8 * tan(angle);
+	}
+
+	// 2. 精确反算 3D 射线与棋盘 Z=0 平面的交点
+	irr::core::matrix4 invView, invProj;
+	if(!viewMat.getInverse(invView) || !projMat.getInverse(invProj)) {
+		hovered_location = 0;
+		return;
+	}
+	auto UnprojectNDC = [&](float nx, float ny, float nz, irr::core::vector3df& outWorld) -> bool {
+		irr::f32 vx = nx * invProj[0] + ny * invProj[4] + nz * invProj[8] + invProj[12];
+		irr::f32 vy = nx * invProj[1] + ny * invProj[5] + nz * invProj[9] + invProj[13];
+		irr::f32 vz = nx * invProj[2] + ny * invProj[6] + nz * invProj[10] + invProj[14];
+		irr::f32 vw = nx * invProj[3] + ny * invProj[7] + nz * invProj[11] + invProj[15];
+		if(vw < 1e-6f && vw > -1e-6f)
+			return false;
+		irr::core::vector3df viewPt(vx / vw, vy / vw, vz / vw);
+		invView.transformVect(outWorld, viewPt);
+		return true;
+	};
+	float ndcx = static_cast<float>(x) / static_cast<float>(GAME_WINDOW_WIDTH) * 2.0f - 1.0f;
+	float ndcy = 1.0f - static_cast<float>(y) / static_cast<float>(GAME_WINDOW_HEIGHT) * 2.0f;
+	irr::core::vector3df rayNear, rayFar;
+	if(!UnprojectNDC(ndcx, ndcy, 0.0f, rayNear) || !UnprojectNDC(ndcx, ndcy, 0.5f, rayFar)) {
+		hovered_location = 0;
+		return;
+	}
+	double dz = static_cast<double>(rayFar.Z - rayNear.Z);
+	if(dz > -1e-6 && dz < 1e-6) {
+		hovered_location = 0;
+		return;
+	}
+	double t = -static_cast<double>(rayNear.Z) / dz;
+	double boardx = static_cast<double>(rayNear.X) + t * static_cast<double>(rayFar.X - rayNear.X);
+	double boardy = static_cast<double>(rayNear.Y) + t * static_cast<double>(rayFar.Y - rayNear.Y);
+	{
 		hovered_location = 0;
 		if(boardx >= matManager.vFieldExtra[0][0].Pos.X && boardx <= matManager.vFieldExtra[0][1].Pos.X) {
 			if(boardy >= matManager.vFieldExtra[0][0].Pos.Y && boardy <= matManager.vFieldExtra[0][2].Pos.Y) {
@@ -2346,35 +2381,41 @@ void ClientField::ShowMenu(int flag, int x, int y) {
 	}
 	menu_card = clicked_card;
 	irr::s32 offset = 0;
+	float mul = (mainGame->xScale < mainGame->yScale) ? mainGame->xScale : mainGame->yScale;
+	irr::s32 width = mainGame->GetPopupMenuButtonWidth();
 	irr::s32 height = mainGame->GetPopupMenuButtonHeight();
+	irr::s32 gap = 0;
+	if(mainGame->gameConf.modern_ui) {
+		irr::s32 modW = static_cast<irr::s32>(88.0f * mul);
+		irr::s32 modH = static_cast<irr::s32>(28.0f * mul);
+		if(modW > width) width = modW;
+		if(modH > height) height = modH;
+		gap = static_cast<irr::s32>(5.0f * mul);
+		if(gap < 4) gap = 4;
+	}
+	auto placeBtn = [&](irr::gui::IGUIButton* btn) {
+		btn->setVisible(true);
+		btn->setRelativePosition(irr::core::recti(0, offset, width, offset + height));
+		offset += height + gap;
+	};
 	if(flag & COMMAND_ACTIVATE) {
-		mainGame->btnActivate->setVisible(true);
-		mainGame->btnActivate->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnActivate);
 	} else mainGame->btnActivate->setVisible(false);
 	if(flag & COMMAND_SUMMON) {
-		mainGame->btnSummon->setVisible(true);
-		mainGame->btnSummon->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnSummon);
 	} else mainGame->btnSummon->setVisible(false);
 	if(flag & COMMAND_SPSUMMON) {
-		mainGame->btnSPSummon->setVisible(true);
-		mainGame->btnSPSummon->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnSPSummon);
 	} else mainGame->btnSPSummon->setVisible(false);
 	if(flag & COMMAND_MSET) {
-		mainGame->btnMSet->setVisible(true);
-		mainGame->btnMSet->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnMSet);
 	} else mainGame->btnMSet->setVisible(false);
 	if(flag & COMMAND_SSET) {
 		if(!(clicked_card->type & TYPE_MONSTER))
 			mainGame->btnSSet->setText(dataManager.GetSysString(1153));
 		else
 			mainGame->btnSSet->setText(dataManager.GetSysString(1159));
-		mainGame->btnSSet->setVisible(true);
-		mainGame->btnSSet->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnSSet);
 	} else mainGame->btnSSet->setVisible(false);
 	if(flag & COMMAND_REPOS) {
 		if(clicked_card->position & POS_FACEDOWN)
@@ -2383,36 +2424,40 @@ void ClientField::ShowMenu(int flag, int x, int y) {
 			mainGame->btnRepos->setText(dataManager.GetSysString(1155));
 		else
 			mainGame->btnRepos->setText(dataManager.GetSysString(1156));
-		mainGame->btnRepos->setVisible(true);
-		mainGame->btnRepos->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnRepos);
 	} else mainGame->btnRepos->setVisible(false);
 	if(flag & COMMAND_ATTACK) {
-		mainGame->btnAttack->setVisible(true);
-		mainGame->btnAttack->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnAttack);
 	} else mainGame->btnAttack->setVisible(false);
 	if(flag & COMMAND_LIST) {
-		mainGame->btnShowList->setVisible(true);
-		mainGame->btnShowList->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnShowList);
 	} else mainGame->btnShowList->setVisible(false);
 	if(flag & COMMAND_OPERATION) {
-		mainGame->btnOperation->setVisible(true);
-		mainGame->btnOperation->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnOperation);
 	} else mainGame->btnOperation->setVisible(false);
 	if(flag & COMMAND_RESET) {
-		mainGame->btnReset->setVisible(true);
-		mainGame->btnReset->setRelativePosition(irr::core::vector2di(0, offset));
-		offset += height;
+		placeBtn(mainGame->btnReset);
 	} else mainGame->btnReset->setVisible(false);
+	if(offset > gap)
+		offset -= gap;
 	panel = mainGame->wCmdMenu;
 	mainGame->wCmdMenu->setVisible(true);
 	mainGame->btnBP->setEnabled(false);
 	mainGame->btnM2->setEnabled(false);
 	mainGame->btnEP->setEnabled(false);
-	mainGame->wCmdMenu->setRelativePosition(mainGame->Resize(x, y, x, y, -20, -(20 + offset), mainGame->GetPopupMenuButtonWidth() - 20, -20));
+	irr::core::recti menuRect = mainGame->Resize(x, y, x, y, -20, -(20 + offset), width - 20, -20);
+	if(menuRect.UpperLeftCorner.Y < 4) {
+		irr::s32 shift = 4 - menuRect.UpperLeftCorner.Y;
+		menuRect.UpperLeftCorner.Y += shift;
+		menuRect.LowerRightCorner.Y += shift;
+	}
+	irr::s32 winH = static_cast<irr::s32>(mainGame->window_size.Height);
+	if(menuRect.LowerRightCorner.Y > winH - 4) {
+		irr::s32 shift = menuRect.LowerRightCorner.Y - (winH - 4);
+		menuRect.UpperLeftCorner.Y -= shift;
+		menuRect.LowerRightCorner.Y -= shift;
+	}
+	mainGame->wCmdMenu->setRelativePosition(menuRect);
 }
 void ClientField::HideMenu() {
 	mainGame->wCmdMenu->setVisible(false);
