@@ -130,13 +130,13 @@ struct Config {
 	int skin_index { -1 };
 	int ask_mset{ 0 };
 	// custom mod: resolution & camera
-	int resolution_preset{ 720 };
+	int resolution_preset{ 0 };
 	bool modern_ui{ true };
 	float cam_x{ 4.2f };
-	float cam_y{ 9.2f };
-	float cam_z{ 5.8f };
+	float cam_y{ 5.5f };
+	float cam_z{ 9.6f };
 	float cam_look_x{ 4.2f };
-	float cam_look_y{ -0.4f };
+	float cam_look_y{ 0.4f };
 	float cam_look_z{ 0.0f };
 	float proj_left{ -0.97f };
 	float proj_right{ 0.52f };
