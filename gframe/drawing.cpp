@@ -900,8 +900,7 @@ void Game::DrawMisc() {
 		irr::f32 vy = (0.5f - v[1] * invW * 0.5f) * 640.0f;
 		return irr::core::vector2di((int)(vx + 0.5f), (int)(vy + 0.5f));
 	};
-	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const wchar_t* text) {
-		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text) {		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
 		DrawShadowText(numFont, text, Resize(pt.X - 45, pt.Y - 10, pt.X + 45, pt.Y + 12), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, true, 0);
