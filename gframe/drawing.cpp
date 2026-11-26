@@ -847,16 +847,19 @@ void Game::DrawMisc() {
 
 		int cardRad = std::max(6, (int)(9 * yScale));
 		int barRad = std::max(3, (int)(4 * yScale));
-		irr::core::recti cardP0 = Resize(324, 6, 628, 56);
-		irr::core::recti cardP1 = Resize(692, 6, 996, 56);
-		irr::core::recti cardTurn = Resize(634, 6, 686, 56);
+		int timeBarRad = std::max(2, (int)(3 * yScale));
+		irr::core::recti cardP0 = Resize(320, 6, 618, 56);
+		irr::core::recti cardTurn = Resize(626, 6, 694, 56);
+		irr::core::recti cardP1 = Resize(702, 6, 1000, 56);
 		DrawHudCard(cardP0, cardRad, isP0Turn, irr::video::SColor(255, 10, 132, 255));
 		DrawHudCard(cardP1, cardRad, !isP0Turn, irr::video::SColor(255, 255, 69, 58));
 		DrawHudCard(cardTurn, cardRad, false, irr::video::SColor(195, 56, 70, 94));
 
-		// Sleek rounded LP progress bars
-		irr::core::recti trackP0 = Resize(334, 30, 618, 37);
-		irr::core::recti trackP1 = Resize(702, 30, 986, 37);
+		bool showTimer = (!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit);
+
+		// Shortened rounded LP progress bars (leaving inner side open for large LP number)
+		irr::core::recti trackP0 = showTimer ? Resize(330, 30, 516, 37) : Resize(330, 34, 516, 42);
+		irr::core::recti trackP1 = showTimer ? Resize(804, 30, 990, 37) : Resize(804, 34, 990, 42);
 		DrawHudPill(trackP0, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
 		DrawHudPill(trackP1, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
 		if(dInfo.start_lp > 0) {
@@ -879,10 +882,10 @@ void Game::DrawMisc() {
 			}
 		}
 
-		// Player names (top outer) & LP numbers (top inner)
+		// Player names (outer top)
 		if(!gameConf.hide_player_name) {
-			irr::core::recti p1size = Resize(335, 9, 540, 29);
-			irr::core::recti p2size = Resize(985, 9, 985, 29);
+			irr::core::recti p1size = Resize(330, 9, 516, 27);
+			irr::core::recti p2size = Resize(990, 9, 990, 27);
 			if(!dInfo.isTag || !dInfo.tag_player[0])
 				textFont->drawUstring(dInfo.hostname, p1size, 0xfff1f5f9, false, false, 0);
 			else
@@ -897,45 +900,79 @@ void Game::DrawMisc() {
 				textFont->drawUstring(dInfo.clientname_tag, p2size, 0xfff1f5f9, false, false, 0);
 			}
 		}
-		DrawShadowText(numFont, dInfo.strLP[0], Resize(540, 8, 622, 28), Resize(0, 0, 0, 0), 0xff38bdf8, 0x00000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.strLP[1], Resize(698, 8, 780, 28), Resize(0, 0, 0, 0), 0xfff87171, 0x00000000, true, false, 0);
 
-		// Bottom status row (time / cards / total ATK)
-		if(!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit) {
-			if(imageManager.tClock) {
-				driver->draw2DImage(imageManager.tClock, ResizeCardMid(574, 39, 590, 54, 590, 46), irr::core::recti(0, 0, 128, 128), 0, 0, true);
-				driver->draw2DImage(imageManager.tClock, ResizeCardMid(702, 39, 718, 54, 718, 46), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+		// Large borderless LP numbers on inner side
+		auto* lpBigFont = lpcFont ? lpcFont : numFont;
+		irr::core::recti lpRect0 = showTimer ? Resize(518, 6, 614, 38) : Resize(518, 8, 614, 54);
+		irr::core::recti lpRect1 = showTimer ? Resize(706, 6, 802, 38) : Resize(706, 8, 802, 54);
+		DrawShadowText(lpBigFont, dInfo.strLP[0], lpRect0, Resize(0, 0, 0, 0), 0xff38bdf8, 0x00000000, true, true, 0);
+		DrawShadowText(lpBigFont, dInfo.strLP[1], lpRect1, Resize(0, 0, 0, 0), 0xfff87171, 0x00000000, true, true, 0);
+
+		// Timer only: shrinking mini progress bar + remaining seconds at inner edge
+		if(showTimer) {
+			static int s_maxTimeSeen = 0;
+			static int s_lastTurnForTimer = -1;
+			static int s_lastTimeLimit = -1;
+			if(dInfo.time_limit != s_lastTimeLimit || (dInfo.turn <= 1 && s_lastTurnForTimer > 1)) {
+				s_maxTimeSeen = 0;
+				s_lastTimeLimit = dInfo.time_limit;
 			}
-			DrawShadowText(numFont, dInfo.str_time_left[0], Resize(591, 38, 621, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[0]), 0x00000000, true, false, 0);
-			DrawShadowText(numFont, dInfo.str_time_left[1], Resize(719, 38, 749, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[1]), 0x00000000, true, false, 0);
+			s_lastTurnForTimer = dInfo.turn;
+			int t0 = BufferIO::GetVal(dInfo.str_time_left[0]);
+			int t1 = BufferIO::GetVal(dInfo.str_time_left[1]);
+			int curMax = std::max(static_cast<int>(dInfo.time_limit), std::max(t0, t1));
+			if(curMax > s_maxTimeSeen)
+				s_maxTimeSeen = curMax;
+			int timeDenom = std::max(s_maxTimeSeen, 1);
 
-			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(535, 39, 546, 54, 546, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(751, 39, 762, 54, 762, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+			auto PickTimerColor = [&](int sec) -> irr::video::SColor {
+				if(sec <= 10) return irr::video::SColor(255, 248, 113, 113);
+				if(sec <= 30 || sec * 10 < timeDenom * 3) return irr::video::SColor(255, 245, 158, 11);
+				return irr::video::SColor(255, 100, 210, 255);
+			};
 
-			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(546, 38, 571, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[0]), 0x00000000, true, false, 0);
-			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(762, 38, 787, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[1]), 0x00000000, true, false, 0);
+			irr::core::recti tTrack0 = Resize(330, 44, 516, 49);
+			irr::core::recti tTrack1 = Resize(804, 44, 990, 49);
+			DrawHudPill(tTrack0, timeBarRad, irr::video::SColor(255, 32, 42, 60), irr::video::SColor(0, 0, 0, 0));
+			DrawHudPill(tTrack1, timeBarRad, irr::video::SColor(255, 32, 42, 60), irr::video::SColor(0, 0, 0, 0));
+			if(t0 > 0) {
+				int tw0 = std::min(tTrack0.getWidth(), (int)((long long)tTrack0.getWidth() * t0 / timeDenom));
+				if(tw0 > 0)
+					DrawHudPill(irr::core::recti(tTrack0.UpperLeftCorner.X, tTrack0.UpperLeftCorner.Y, tTrack0.UpperLeftCorner.X + tw0, tTrack0.LowerRightCorner.Y), timeBarRad, PickTimerColor(t0), irr::video::SColor(0, 0, 0, 0));
+			}
+			if(t1 > 0) {
+				int tw1 = std::min(tTrack1.getWidth(), (int)((long long)tTrack1.getWidth() * t1 / timeDenom));
+				if(tw1 > 0)
+					DrawHudPill(irr::core::recti(tTrack1.LowerRightCorner.X - tw1, tTrack1.UpperLeftCorner.Y, tTrack1.LowerRightCorner.X, tTrack1.LowerRightCorner.Y), timeBarRad, PickTimerColor(t1), irr::video::SColor(0, 0, 0, 0));
+			}
 
-			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(482, 38, 532, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[0]), 0x00000000, true, false, 0);
-			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(798, 38, 848, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[1]), 0x00000000, true, false, 0);
-
-			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(473, 39, 482, 54, 482, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(789, 39, 798, 54, 798, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-		} else {
-			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(585, 39, 596, 54, 596, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(702, 39, 713, 54, 713, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-
-			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(596, 38, 621, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[0]), 0x00000000, true, false, 0);
-			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(713, 38, 738, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[1]), 0x00000000, true, false, 0);
-
-			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(532, 38, 582, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[0]), 0x00000000, true, false, 0);
-			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(749, 38, 799, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[1]), 0x00000000, true, false, 0);
-
-			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(523, 39, 532, 54, 532, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(740, 39, 749, 54, 749, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+			DrawShadowText(numFont, dInfo.str_time_left[0], Resize(566, 38, 612, 54), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[0]), 0x00000000, true, true, 0);
+			DrawShadowText(numFont, dInfo.str_time_left[1], Resize(708, 38, 754, 54), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[1]), 0x00000000, true, true, 0);
 		}
 
-		// Clean Turn Badge
-		DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(634, 8, 686, 54), Resize(0, 0, 0, 0), isP0Turn ? 0xff38bdf8 : 0xfff87171, 0x00000000, true, true, 0);
+		// Turn Badge: "回合" header + large white turn number + colored directional arrow
+		DrawShadowText(textFont, L"回合", Resize(628, 7, 692, 22), Resize(0, 0, 0, 0), 0xff94a3b8, 0x00000000, true, true, 0);
+		DrawShadowText(lpBigFont, dataManager.GetNumString(dInfo.turn), Resize(638, 20, 682, 54), Resize(0, 0, 0, 0), 0xfff8fafc, 0x00000000, true, true, 0);
+		{
+			int cy = (int)(37.0f * yScale);
+			int ah = std::max(5, (int)(6.5f * yScale));
+			int aw = std::max(4, (int)(5.5f * xScale));
+			int th = std::max(2, (int)(2.2f * yScale));
+			irr::video::SColor arrowCol = isP0Turn ? irr::video::SColor(255, 56, 189, 248) : irr::video::SColor(255, 248, 113, 113);
+			if(isP0Turn) {
+				int ax = (int)(631.0f * xScale);
+				for(int dy = -ah; dy <= ah; ++dy) {
+					int dx = (std::abs(dy) * aw) / ah;
+					driver->draw2DRectangle(arrowCol, irr::core::recti(ax + dx, cy + dy, ax + dx + th, cy + dy + 1));
+				}
+			} else {
+				int ax = (int)(689.0f * xScale);
+				for(int dy = -ah; dy <= ah; ++dy) {
+					int dx = (std::abs(dy) * aw) / ah;
+					driver->draw2DRectangle(arrowCol, irr::core::recti(ax - dx - th, cy + dy, ax - dx, cy + dy + 1));
+				}
+			}
+		}
 	} else {
 		if(isP0Turn) {
 			driver->draw2DRectangle(0xa0000000, Resize(327, 8, 630, 51));
