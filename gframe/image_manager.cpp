@@ -206,8 +206,22 @@ void ImageManager::ResizeTexture() {
 		irr::u32 h = bgHeight > 0 ? static_cast<irr::u32>(bgHeight) : 16;
 		irr::video::IImage* solidBg = driver->createImage(irr::video::ECF_A8R8G8B8, irr::core::dimension2d<irr::u32>(w, h));
 		if(solidBg) {
-			solidBg->fill(irr::video::SColor(255, 213, 221, 232));
-			char bgName[64];
+			irr::u32* pixels = static_cast<irr::u32*>(solidBg->lock());
+			if(pixels) {
+				irr::u32 stride = solidBg->getPitch() / 4;
+				for(irr::u32 y = 0; y < h; ++y) {
+					float t = (h > 1) ? static_cast<float>(y) / static_cast<float>(h - 1) : 0.0f;
+					irr::u32 rowCol = irr::video::SColor(
+						255,
+						static_cast<irr::u32>(15.0f + t * 9.0f),
+						static_cast<irr::u32>(21.0f + t * 11.0f),
+						static_cast<irr::u32>(34.0f + t * 15.0f)).color;
+					irr::u32* row = pixels + y * stride;
+					for(irr::u32 x = 0; x < w; ++x)
+						row[x] = rowCol;
+				}
+				solidBg->unlock();
+			}			char bgName[64];
 			mysnprintf(bgName, "textures/solid_bg/%u_%u", w, h);
 			tBackGround = driver->addTexture(bgName, solidBg);
 			solidBg->drop();
