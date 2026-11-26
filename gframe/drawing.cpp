@@ -888,108 +888,99 @@ void Game::DrawMisc() {
 	driver->draw2DRectangle(Resize(632, 10, 688, 30), 0x00000000, 0x00000000, 0xffffffff, 0xffffffff);
 	driver->draw2DRectangle(Resize(632, 30, 688, 50), 0xffffffff, 0xffffffff, 0x00000000, 0x00000000);
 	DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(635, 5, 687, 40), Resize(0, 0, 2, 0), 0x8000ffff, 0x80000000, true, false, 0);
+	auto ProjectToVirtual = [&](const irr::core::vector3df& pos) -> irr::core::vector2di {
+		irr::core::matrix4 trans = driver->getTransform(irr::video::ETS_PROJECTION);
+		trans *= driver->getTransform(irr::video::ETS_VIEW);
+		irr::f32 v[4] = { pos.X, pos.Y, pos.Z, 1.0f };
+		trans.multiplyWith1x4Matrix(v);
+		if(v[3] == 0.0f)
+			return irr::core::vector2di(-1000, -1000);
+		irr::f32 invW = 1.0f / v[3];
+		irr::f32 vx = (v[0] * invW * 0.5f + 0.5f) * 1024.0f;
+		irr::f32 vy = (0.5f - v[1] * invW * 0.5f) * 640.0f;
+		return irr::core::vector2di((int)(vx + 0.5f), (int)(vy + 0.5f));
+	};
+	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const wchar_t* text) {
+		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
+		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
+		DrawShadowText(numFont, text, Resize(pt.X - 45, pt.Y - 10, pt.X + 45, pt.Y + 12), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, true, 0);
+	};
+	auto DrawScaleText = [&](const irr::video::S3DVertex* zone, const wchar_t* text) {
+		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
+		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, 0.05f));
+		DrawShadowText(adFont, text, Resize(pt.X - 18, pt.Y - 10, pt.X + 18, pt.Y + 10), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, true, 0);
+	};
+
 	ClientCard* pcard;
-	for(int i = 0; i < 5; ++i) {
+	for(int i = 0; i < 7; ++i) {
 		pcard = dField.mzone[0][i];
-		if(pcard && pcard->code != 0)
-			DrawStatus(pcard, 493 + i * 85, 416, 473 + i * 80, 356);
+		if(pcard && pcard->code != 0) {
+			auto& zone = matManager.vFieldMzone[0][i];
+			float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+			float minX = std::min(zone[0].Pos.X, zone[1].Pos.X);
+			float minY = std::min(zone[0].Pos.Y, zone[2].Pos.Y);
+			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
+			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, maxY, 0.05f));
+			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, minY, 0.05f));
+			DrawStatus(pcard, ptAD.X, ptAD.Y - 2, ptLV.X + 2, ptLV.Y);
+		}
 	}
-	pcard = dField.mzone[0][5];
-	if(pcard && pcard->code != 0)
-		DrawStatus(pcard, 589, 338, 563, 291);
-	pcard = dField.mzone[0][6];
-	if(pcard && pcard->code != 0)
-		DrawStatus(pcard, 743, 338, 712, 291);
-	for(int i = 0; i < 5; ++i) {
+	for(int i = 0; i < 7; ++i) {
 		pcard = dField.mzone[1][i];
-		if(pcard && (pcard->position & POS_FACEUP))
-			DrawStatus(pcard, 803 - i * 68, 235, 779 - i * 71, 272);
+		if(pcard && (pcard->position & POS_FACEUP)) {
+			auto& zone = matManager.vFieldMzone[1][i];
+			float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+			float minX = std::min(zone[0].Pos.X, zone[1].Pos.X);
+			float minY = std::min(zone[0].Pos.Y, zone[2].Pos.Y);
+			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
+			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, minY, 0.05f));
+			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, maxY, 0.05f));
+			DrawStatus(pcard, ptAD.X, ptAD.Y - 16, ptLV.X + 2, ptLV.Y - 16);
+		}
 	}
-	pcard = dField.mzone[1][5];
-	if(pcard && (pcard->position & POS_FACEUP))
-		DrawStatus(pcard, 739, 291, 710, 338);
-	pcard = dField.mzone[1][6];
-	if(pcard && (pcard->position & POS_FACEUP))
-		DrawStatus(pcard, 593, 291, 555, 338);
 	if(dInfo.duel_rule < 4) {
 		pcard = dField.szone[0][6];
-		if(pcard) {
-			DrawShadowText(adFont, pcard->lscstring, Resize(427, 395, 439, 415), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard)
+			DrawScaleText(matManager.vFieldSzone[0][6][rule], pcard->lscstring);
 		pcard = dField.szone[0][7];
-		if(pcard) {
-			DrawShadowText(adFont, pcard->rscstring, Resize(881, 395, 913, 415), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard)
+			DrawScaleText(matManager.vFieldSzone[0][7][rule], pcard->rscstring);
 		pcard = dField.szone[1][6];
-		if(pcard) {
-			DrawShadowText(adFont, pcard->lscstring, Resize(840, 246, 872, 266), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard)
+			DrawScaleText(matManager.vFieldSzone[1][6][rule], pcard->lscstring);
 		pcard = dField.szone[1][7];
-		if(pcard) {
-			DrawShadowText(adFont, pcard->rscstring, Resize(464, 246, 496, 266), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard)
+			DrawScaleText(matManager.vFieldSzone[1][7][rule], pcard->rscstring);
 	} else {
 		pcard = dField.szone[0][0];
-		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget) {
-			DrawShadowText(adFont, pcard->lscstring, Resize(455, 431, 467, 451), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
+			DrawScaleText(matManager.vFieldSzone[0][0][rule], pcard->lscstring);
 		pcard = dField.szone[0][4];
-		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget) {
-			DrawShadowText(adFont, pcard->rscstring, Resize(851, 431, 883, 451), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
+			DrawScaleText(matManager.vFieldSzone[0][4][rule], pcard->rscstring);
 		pcard = dField.szone[1][0];
-		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget) {
-			DrawShadowText(adFont, pcard->lscstring, Resize(807, 223, 839, 243), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
+			DrawScaleText(matManager.vFieldSzone[1][0][rule], pcard->lscstring);
 		pcard = dField.szone[1][4];
-		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget) {
-			DrawShadowText(adFont, pcard->rscstring, Resize(499, 223, 531, 243), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-		}
+		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
+			DrawScaleText(matManager.vFieldSzone[1][4][rule], pcard->rscstring);
 	}
-	if(dField.extra[0].size()) {
-		int offset = (dField.extra[0].size() >= 10) ? 0 : numFont->getDimension(dataManager.GetNumString(1)).Width;
-		DrawShadowText(numFont, dataManager.GetNumString(dField.extra[0].size()), Resize(320, 563, 373, 553, offset, 0, 0, 0), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dataManager.GetNumString(dField.extra_p_count[0], true), Resize(340, 563, 393, 553), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-	}
-	if(dField.deck[0].size()) {
-		DrawShadowText(numFont, dataManager.GetNumString(dField.deck[0].size()), Resize(908, 563, 1023, 553), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-	}
-	if (rule == 0) {
-		if (dField.grave[0].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.grave[0].size()), Resize(837, 376, 986, 381), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
+	for(int p = 0; p < 2; ++p) {
+		if(dField.extra[p].size()) {
+			wchar_t extraStr[32];
+			myswprintf(extraStr, L"%d (%d)", (int)dField.extra[p].size(), dField.extra_p_count[p]);
+			DrawZoneText(matManager.vFieldExtra[p], dField.extra[p].size() * 0.01f + 0.03f, extraStr);
 		}
-		if (dField.remove[0].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.remove[0].size()), Resize(1015, 376, 959, 381), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
+		if(dField.deck[p].size()) {
+			DrawZoneText(matManager.vFieldDeck[p], dField.deck[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.deck[p].size()));
 		}
-	} else {
-		if (dField.grave[0].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.grave[0].size()), Resize(870, 457, 1004, 462), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
+		if(dField.grave[p].size()) {
+			DrawZoneText(matManager.vFieldGrave[p][rule], dField.grave[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.grave[p].size()));
 		}
-		if (dField.remove[0].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.remove[0].size()), Resize(837, 376, 986, 381), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		}
-	}
-	if(dField.extra[1].size()) {
-		int offset = (dField.extra[1].size() >= 10) ? 0 : numFont->getDimension(dataManager.GetNumString(1)).Width;
-		DrawShadowText(numFont, dataManager.GetNumString(dField.extra[1].size()), Resize(808, 208, 900, 233, offset, 0, 0, 0), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dataManager.GetNumString(dField.extra_p_count[1], true), Resize(828, 208, 920, 233), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-	}
-	if(dField.deck[1].size()) {
-		DrawShadowText(numFont, dataManager.GetNumString(dField.deck[1].size()), Resize(465, 208, 483, 233), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-	}
-	if (rule == 0) {
-		if (dField.grave[1].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.grave[1].size()), Resize(420, 311, 464, 282), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		}
-		if (dField.remove[1].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.remove[1].size()), Resize(300, 311, 445, 341), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		}
-	} else {
-		if (dField.grave[1].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.grave[1].size()), Resize(455, 250, 464, 300), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
-		}
-		if (dField.remove[1].size()) {
-			DrawShadowText(numFont, dataManager.GetNumString(dField.remove[1].size()), Resize(420, 311, 464, 282), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, false, 0);
+		if(dField.remove[p].size()) {
+			DrawZoneText(matManager.vFieldRemove[p][rule], dField.remove[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.remove[p].size()));
 		}
 	}
 }
