@@ -451,17 +451,17 @@ bool Game::Initialize() {
 	imgCard->setScaleImage(true);
 	imgCard->setUseAlphaChannel(true);
 	//phase
-	wPhase = env->addStaticText(L"", irr::core::rect<irr::s32>(500, 308, 756, 332));
+	wPhase = env->addStaticText(L"", irr::core::rect<irr::s32>(493, 287, 829, 311));
 	wPhase->setVisible(false);
-	btnPhaseStatus = env->addButton(irr::core::rect<irr::s32>(0, 0, 56, 24), wPhase, BUTTON_PHASE, L"");
+	btnPhaseStatus = env->addButton(irr::core::rect<irr::s32>(0, 0, 54, 24), wPhase, BUTTON_PHASE, L"");
 	btnPhaseStatus->setIsPushButton(true);
 	btnPhaseStatus->setPressed(true);
 	btnPhaseStatus->setVisible(false);
-	btnBP = env->addButton(irr::core::rect<irr::s32>(100, 0, 156, 24), wPhase, BUTTON_BP, L"\xff22\xff30");
+	btnBP = env->addButton(irr::core::rect<irr::s32>(140, 0, 194, 24), wPhase, BUTTON_BP, L"\xff22\xff30");
 	btnBP->setVisible(false);
-	btnM2 = env->addButton(irr::core::rect<irr::s32>(100, 0, 156, 24), wPhase, BUTTON_M2, L"\xff2d\xff12");
+	btnM2 = env->addButton(irr::core::rect<irr::s32>(140, 0, 194, 24), wPhase, BUTTON_M2, L"\xff2d\xff12");
 	btnM2->setVisible(false);
-	btnEP = env->addButton(irr::core::rect<irr::s32>(200, 0, 256, 24), wPhase, BUTTON_EP, L"\xff25\xff30");
+	btnEP = env->addButton(irr::core::rect<irr::s32>(280, 0, 334, 24), wPhase, BUTTON_EP, L"\xff25\xff30");
 	btnEP->setVisible(false);
 	//tab
 	wInfos = env->addTabControl(irr::core::rect<irr::s32>(1, 275, 301, 639), 0, true);
@@ -3039,11 +3039,11 @@ void Game::OnResize() {
 		ClearCardInfo();
 	btnClearLog->setRelativePosition(Resize(160, 300, 260, 325));
 
-	wPhase->setRelativePosition(Resize(500, 308, 756, 332));
-	btnPhaseStatus->setRelativePosition(Resize(0, 0, 56, 24));
-	btnBP->setRelativePosition(Resize(100, 0, 156, 24));
-	btnM2->setRelativePosition(Resize(100, 0, 156, 24));
-	btnEP->setRelativePosition(Resize(200, 0, 256, 24));
+	wPhase->setRelativePosition(Resize(493, 287, 829, 311));
+	btnPhaseStatus->setRelativePosition(Resize(0, 0, 54, 24));
+	btnBP->setRelativePosition(Resize(140, 0, 194, 24));
+	btnM2->setRelativePosition(Resize(140, 0, 194, 24));
+	btnEP->setRelativePosition(Resize(280, 0, 334, 24));
 
 	ResizeChatInputWindow();
 	ResizeCmdMenu();
