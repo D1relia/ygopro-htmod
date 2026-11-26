@@ -1574,18 +1574,29 @@ void Game::DrawDeckBd() {
 	deckBuilder.layout.sr_row_h  = 66.0f * mul;
 	deckBuilder.layout.sr_top_px = 165.0f * yScale;
 
+	irr::video::SColor deckPanelTop = gameConf.modern_ui ? 0xdcf8fafc : 0x400000ff;
+	irr::video::SColor deckPanelBot = gameConf.modern_ui ? 0xe6f1f5f9 : 0x40000000;
+	irr::video::SColor deckHdrTop   = gameConf.modern_ui ? 0xeeffffff : 0x400000ff;
+	irr::video::SColor deckHdrBot   = gameConf.modern_ui ? 0xeef1f5f9 : 0x40000000;
+	irr::video::SColor deckBorder   = gameConf.modern_ui ? 0xffcbd5e1 : 0xffffffff;
+	irr::video::SColor deckHoverCol = gameConf.modern_ui ? 0xff007aff : 0xffffffff;
+	irr::video::SColor deckTextCol  = gameConf.modern_ui ? 0xff1e293b : 0xffffffff;
+	irr::video::SColor deckSubCol   = gameConf.modern_ui ? 0xff475569 : 0xffffffff;
+	irr::video::SColor deckShadCol  = gameConf.modern_ui ? 0x00000000 : 0xff000000;
+	irr::video::SColor srHoverBg    = gameConf.modern_ui ? 0x44007aff : 0x80000000;
+
 	// ====== Main deck header (fixed position) ======
-	driver->draw2DRectangle(Resize(310, 137, 410, 157), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-	driver->draw2DRectangleOutline(Resize(309, 136, 410, 157));
-	DrawShadowText(textFont, dataManager.GetSysString(deckBuilder.showing_pack ? 1477 : 1330), Resize(315, 137, 410, 157), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-	DrawShadowText(numFont, dataManager.GetNumString(mainsize), Resize(380, 138, 440, 158), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
+	driver->draw2DRectangle(Resize(310, 137, 410, 157), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+	driver->draw2DRectangleOutline(Resize(309, 136, 410, 157), deckBorder);
+	DrawShadowText(textFont, dataManager.GetSysString(deckBuilder.showing_pack ? 1477 : 1330), Resize(315, 137, 410, 157), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+	DrawShadowText(numFont, dataManager.GetNumString(mainsize), Resize(380, 138, 440, 158), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
 	// ====== Main deck panel background (dynamic bottom) ======
 	driver->draw2DRectangle(
 		irr::core::recti((int)(310 * xScale), (int)(160 * yScale), (int)(797 * xScale), (int)main_panel_bot),
-		0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
+		deckPanelTop, deckPanelTop, deckPanelBot, deckPanelBot);
 	driver->draw2DRectangleOutline(irr::core::recti(
 		(int)(309 * xScale) - 1, (int)(159 * yScale) - 1,
-		(int)(797 * xScale) + 1, (int)main_panel_bot + 1));
+		(int)(797 * xScale) + 1, (int)main_panel_bot + 1), deckBorder);
 
 	// ====== Main deck / pack cards ======
 	{
@@ -1599,29 +1610,28 @@ void Game::DrawDeckBd() {
 			int sy  = (int)(panel_top  + row * main_dy);
 			DrawThumb(deckManager.current_deck.main[j], irr::core::vector2di(sx, sy), mul, deckBuilder.filterList);
 			if(deckBuilder.hovered_pos == 1 && deckBuilder.hovered_seq == j)
-				driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1));
+				driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1), deckHoverCol);
 		}
 	}
 
 	if(!deckBuilder.showing_pack) {
 		// ====== Main deck type count bar (fixed position in header) ======
-		driver->draw2DRectangle(Resize(638, 137, 797, 157), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(Resize(637, 136, 797, 157));
+		driver->draw2DRectangle(Resize(638, 137, 797, 157), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(Resize(637, 136, 797, 157), deckBorder);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, ResizeCardHint(645, 136, 645+14+3/8, 156), irr::core::recti(0, 0, 23, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_MONSTER)), Resize(670, 138, 690, 158), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_MONSTER)), Resize(670, 138, 690, 158), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, ResizeCardHint(695, 136, 695+14+3/8, 156), irr::core::recti(23, 0, 46, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_SPELL)), Resize(720, 138, 740, 158), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_SPELL)), Resize(720, 138, 740, 158), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, ResizeCardHint(745, 136, 745+14+3/8, 156), irr::core::recti(46, 0, 69, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_TRAP)), Resize(770, 138, 790, 158), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.main, TYPE_TRAP)), Resize(770, 138, 790, 158), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 
 		// ====== Dynamic layout helpers (logical-X * xScale, Y already in screen pixels) ======
 		auto lrect = [&](float x1, float y1_px, float x2, float y2_px) {
 			return irr::core::recti((int)(x1 * xScale), (int)y1_px, (int)(x2 * xScale), (int)y2_px);
 		};
-		// Icon centered at screen-pixel mid_y, sized by mul
 		auto hicon = [&](float cx_log, float mid_y_px, float hw_log, float hh_log) {
 			return irr::core::recti(
 				(int)(cx_log * xScale - hw_log * mul), (int)(mid_y_px - hh_log * mul),
@@ -1631,28 +1641,28 @@ void Game::DrawDeckBd() {
 		float mid_sd = (sd_hdr_top + sd_hdr_bot) * 0.5f;
 
 		// ====== Extra deck header (dynamic position) ======
-		driver->draw2DRectangle(lrect(310, ex_hdr_top, 410, ex_hdr_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(309, ex_hdr_top - 1, 410, ex_hdr_bot + 1));
-		DrawShadowText(textFont, dataManager.GetSysString(1331), lrect(315, ex_hdr_top, 410, ex_hdr_bot), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.current_deck.extra.size()), lrect(380, ex_hdr_top, 440, ex_hdr_bot), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		driver->draw2DRectangle(lrect(582, ex_hdr_top, 797, ex_hdr_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(581, ex_hdr_top - 1, 797, ex_hdr_bot + 1));
+		driver->draw2DRectangle(lrect(310, ex_hdr_top, 410, ex_hdr_bot), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(lrect(309, ex_hdr_top - 1, 410, ex_hdr_bot + 1), deckBorder);
+		DrawShadowText(textFont, dataManager.GetSysString(1331), lrect(315, ex_hdr_top, 410, ex_hdr_bot), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.current_deck.extra.size()), lrect(380, ex_hdr_top, 440, ex_hdr_bot), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		driver->draw2DRectangle(lrect(582, ex_hdr_top, 797, ex_hdr_bot), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(lrect(581, ex_hdr_top - 1, 797, ex_hdr_bot + 1), deckBorder);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(602.0f, mid_ex, 7.0f, 10.0f), irr::core::recti(0, 32, 23, 64), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_FUSION)), lrect(620, ex_hdr_top, 640, ex_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_FUSION)), lrect(620, ex_hdr_top, 640, ex_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(652.0f, mid_ex, 7.0f, 10.0f), irr::core::recti(23, 32, 46, 64), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_SYNCHRO)), lrect(670, ex_hdr_top, 690, ex_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_SYNCHRO)), lrect(670, ex_hdr_top, 690, ex_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(702.0f, mid_ex, 7.0f, 10.0f), irr::core::recti(46, 32, 69, 64), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_XYZ)), lrect(720, ex_hdr_top, 740, ex_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_XYZ)), lrect(720, ex_hdr_top, 740, ex_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(752.0f, mid_ex, 7.0f, 10.0f), irr::core::recti(0, 64, 23, 96), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_LINK)), lrect(770, ex_hdr_top, 790, ex_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.extra, TYPE_LINK)), lrect(770, ex_hdr_top, 790, ex_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 
 		// ====== Extra deck panel + cards (left-aligned, max spacing) ======
-		driver->draw2DRectangle(lrect(310, ex_zone_top, 797, ex_zone_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(309, ex_zone_top - 1, 797, ex_zone_bot + 1));
+		driver->draw2DRectangle(lrect(310, ex_zone_top, 797, ex_zone_bot), deckPanelTop, deckPanelTop, deckPanelBot, deckPanelBot);
+		driver->draw2DRectangleOutline(lrect(309, ex_zone_top - 1, 797, ex_zone_bot + 1), deckBorder);
 		{
 			int   n_extra   = (int)deckManager.current_deck.extra.size();
 			int   max_at_dx = (int)((panel_w - cw) / dx_max) + 1;
@@ -1669,30 +1679,30 @@ void Game::DrawDeckBd() {
 				int sy = (int)ex_card_y;
 				DrawThumb(deckManager.current_deck.extra[i], irr::core::vector2di(sx, sy), mul, deckBuilder.filterList);
 				if(deckBuilder.hovered_pos == 2 && deckBuilder.hovered_seq == i)
-					driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1));
+					driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1), deckHoverCol);
 			}
 		}
 
 		// ====== Side deck header (dynamic position) ======
-		driver->draw2DRectangle(lrect(310, sd_hdr_top, 410, sd_hdr_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(309, sd_hdr_top - 1, 410, sd_hdr_bot + 1));
-		DrawShadowText(textFont, dataManager.GetSysString(1332), lrect(315, sd_hdr_top, 410, sd_hdr_bot), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.current_deck.side.size()), lrect(380, sd_hdr_top, 440, sd_hdr_bot), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		driver->draw2DRectangle(lrect(638, sd_hdr_top, 797, sd_hdr_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(637, sd_hdr_top - 1, 797, sd_hdr_bot + 1));
+		driver->draw2DRectangle(lrect(310, sd_hdr_top, 410, sd_hdr_bot), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(lrect(309, sd_hdr_top - 1, 410, sd_hdr_bot + 1), deckBorder);
+		DrawShadowText(textFont, dataManager.GetSysString(1332), lrect(315, sd_hdr_top, 410, sd_hdr_bot), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.current_deck.side.size()), lrect(380, sd_hdr_top, 440, sd_hdr_bot), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		driver->draw2DRectangle(lrect(638, sd_hdr_top, 797, sd_hdr_bot), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(lrect(637, sd_hdr_top - 1, 797, sd_hdr_bot + 1), deckBorder);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(652.0f, mid_sd, 7.0f, 10.0f), irr::core::recti(0, 0, 23, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_MONSTER)), lrect(670, sd_hdr_top, 690, sd_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_MONSTER)), lrect(670, sd_hdr_top, 690, sd_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(702.0f, mid_sd, 7.0f, 10.0f), irr::core::recti(23, 0, 46, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_SPELL)), lrect(720, sd_hdr_top, 740, sd_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_SPELL)), lrect(720, sd_hdr_top, 740, sd_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 		if(imageManager.tCardType)
 			driver->draw2DImage(imageManager.tCardType, hicon(752.0f, mid_sd, 7.0f, 10.0f), irr::core::recti(46, 0, 69, 32), 0, 0, true);
-		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_TRAP)), lrect(770, sd_hdr_top, 790, sd_hdr_bot), Resize(0, 1, 1, 0), 0xffffffff, 0xff000000, true, false);
+		DrawShadowText(numFont, dataManager.GetNumString(deckManager.TypeCount(deckManager.current_deck.side, TYPE_TRAP)), lrect(770, sd_hdr_top, 790, sd_hdr_bot), Resize(0, 1, 1, 0), deckTextCol, deckShadCol, true, false);
 
 		// ====== Side deck panel + cards (left-aligned, max spacing) ======
-		driver->draw2DRectangle(lrect(310, sd_zone_top, 797, sd_zone_bot), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(lrect(309, sd_zone_top - 1, 797, sd_zone_bot + 1));
+		driver->draw2DRectangle(lrect(310, sd_zone_top, 797, sd_zone_bot), deckPanelTop, deckPanelTop, deckPanelBot, deckPanelBot);
+		driver->draw2DRectangleOutline(lrect(309, sd_zone_top - 1, 797, sd_zone_bot + 1), deckBorder);
 		{
 			int   n_side    = (int)deckManager.current_deck.side.size();
 			int   max_at_dx = (int)((panel_w - cw) / dx_max) + 1;
@@ -1709,29 +1719,29 @@ void Game::DrawDeckBd() {
 				int sy = (int)sd_card_y;
 				DrawThumb(deckManager.current_deck.side[i], irr::core::vector2di(sx, sy), mul, deckBuilder.filterList);
 				if(deckBuilder.hovered_pos == 3 && deckBuilder.hovered_seq == i)
-					driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1));
+					driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1), deckHoverCol);
 			}
 		}
 	}
 
 	if(is_siding) {
-		driver->draw2DRectangle(Resize(805, 10, 1020, 630), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(Resize(804, 9, 1020, 630));
+		driver->draw2DRectangle(Resize(805, 10, 1020, 630), deckPanelTop, deckPanelTop, deckPanelBot, deckPanelBot);
+		driver->draw2DRectangleOutline(Resize(804, 9, 1020, 630), deckBorder);
 	} else {
-		driver->draw2DRectangle(Resize(805, 137, 926, 157), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(Resize(804, 136, 926, 157));
-		DrawShadowText(textFont, dataManager.GetSysString(1333), Resize(810, 137, 915, 157), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		DrawShadowText(numFont, deckBuilder.result_string, Resize(875, 137, 935, 157), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, false, true);
-		driver->draw2DRectangle(Resize(805, 160, 1020, 630), 0x400000ff, 0x400000ff, 0x40000000, 0x40000000);
-		driver->draw2DRectangleOutline(Resize(804, 159, 1020, 630));
+		driver->draw2DRectangle(Resize(805, 137, 926, 157), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
+		driver->draw2DRectangleOutline(Resize(804, 136, 926, 157), deckBorder);
+		DrawShadowText(textFont, dataManager.GetSysString(1333), Resize(810, 137, 915, 157), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		DrawShadowText(numFont, deckBuilder.result_string, Resize(875, 137, 935, 157), Resize(1, 1, 1, 1), deckTextCol, deckShadCol, false, true);
+		driver->draw2DRectangle(Resize(805, 160, 1020, 630), deckPanelTop, deckPanelTop, deckPanelBot, deckPanelBot);
+		driver->draw2DRectangleOutline(Resize(804, 159, 1020, 630), deckBorder);
 	}
 	// ====== Search results (mul-based row height, text right after card) ======
-	float sr_row_h   = deckBuilder.layout.sr_row_h;   // 66 * mul
-	float sr_top_px  = deckBuilder.layout.sr_top_px;  // 165 * yScale
+	float sr_row_h   = deckBuilder.layout.sr_row_h;
+	float sr_top_px  = deckBuilder.layout.sr_top_px;
 	int   max_visible = deckBuilder.GetSearchResultMaxVisible();
 	int   max_result  = gameConf.use_image_load_background_thread ? max_visible + 2 : max_visible;
-	float tx_base  = 810.0f * xScale + cw + 6.0f * mul;  // text left: right after card + gap
-	float tx_right = 1019.0f * xScale;                    // text right: full search panel width
+	float tx_base  = 810.0f * xScale + cw + 6.0f * mul;
+	float tx_right = 1019.0f * xScale;
 	for(int i = 0; i < max_result && i + scrFilter->getPos() < (int)deckBuilder.results.size(); ++i) {
 		const CardDataC* ptr = deckBuilder.results[i + scrFilter->getPos()];
 		if(i >= max_visible) {
@@ -1740,10 +1750,9 @@ void Game::DrawDeckBd() {
 		}
 		float row_y = sr_top_px + i * sr_row_h;
 		if(deckBuilder.hovered_pos == 4 && deckBuilder.hovered_seq == (int)i)
-			driver->draw2DRectangle(0x80000000, irr::core::recti(
+			driver->draw2DRectangle(srHoverBg, irr::core::recti(
 				(int)(806 * xScale), (int)row_y, (int)(1019 * xScale), (int)(row_y + sr_row_h)));
 		DrawThumb(ptr, irr::core::vector2di((int)(810 * xScale), (int)row_y), mul, deckBuilder.filterList);
-		// Helper: text line rect (3 lines per entry, 22*mul apart)
 		auto trow = [&](int line) {
 			return irr::core::recti(
 				(int)tx_base,  (int)(row_y + line * 22.0f * mul),
@@ -1758,7 +1767,7 @@ void Game::DrawDeckBd() {
 			availBuffer = L" [Custom]";
 		if(ptr->type & TYPE_MONSTER) {
 			myswprintf(textBuffer, L"%ls", dataManager.GetName(ptr->code));
-			DrawShadowText(textFont, textBuffer, trow(0), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(0), Resize(1, 1, 0, 0), deckTextCol, deckShadCol);
 			const wchar_t* form = L"\u2605";
 			wchar_t adBuffer[32]{};
 			wchar_t scaleBuffer[16]{};
@@ -1783,20 +1792,20 @@ void Game::DrawDeckBd() {
 			const auto& attribute = dataManager.FormatAttribute(ptr->attribute);
 			const auto& race = dataManager.FormatRace(ptr->race);
 			myswprintf(textBuffer, L"%ls/%ls %ls%d", attribute.c_str(), race.c_str(), form, ptr->level);
-			DrawShadowText(textFont, textBuffer, trow(1), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(1), Resize(1, 1, 0, 0), deckSubCol, deckShadCol);
 			if(ptr->type & TYPE_PENDULUM) {
 				myswprintf(scaleBuffer, L" %d/%d", ptr->lscale, ptr->rscale);
 			}
 			myswprintf(textBuffer, L"%ls%ls%ls", adBuffer, scaleBuffer, availBuffer);
-			DrawShadowText(textFont, textBuffer, trow(2), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(2), Resize(1, 1, 0, 0), deckSubCol, deckShadCol);
 		} else {
 			myswprintf(textBuffer, L"%ls", dataManager.GetName(ptr->code));
-			DrawShadowText(textFont, textBuffer, trow(0), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(0), Resize(1, 1, 0, 0), deckTextCol, deckShadCol);
 			const auto& type = dataManager.FormatType(ptr->type);
 			myswprintf(textBuffer, L"%ls", type.c_str());
-			DrawShadowText(textFont, textBuffer, trow(1), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(1), Resize(1, 1, 0, 0), deckSubCol, deckShadCol);
 			myswprintf(textBuffer, L"%ls", availBuffer);
-			DrawShadowText(textFont, textBuffer, trow(2), Resize(1, 1, 0, 0));
+			DrawShadowText(textFont, textBuffer, trow(2), Resize(1, 1, 0, 0), deckSubCol, deckShadCol);
 		}
 	}
 	if(deckBuilder.is_draging) {
