@@ -46,6 +46,17 @@ UninstalledAll=%1 已卸载，萌卡官方原版内核已恢复。
 
 [Files]
 Source: "..\bin\release\x64\YGOPro.exe"; DestDir: "{app}"; DestName: "ygopro.exe"; Flags: ignoreversion
+#ifexist "fonts\MiSans-Medium.ttf"
+Source: "fonts\MiSans-Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+#endif
+#ifexist "..\bin\installer\SC_Updater.exe"
+Source: "..\bin\installer\SC_Updater.exe"; DestDir: "{app}"; DestName: "更新简中官方译名.exe"; Flags: ignoreversion
+#endif
+
+#ifexist "..\bin\installer\SC_Updater.exe"
+[Run]
+Filename: "{app}\更新简中官方译名.exe"; WorkingDir: "{app}"; Description: "立即联网更新简体中文官方译名补丁（后续也可在萌卡目录双击重新运行）"; Flags: postinstall nowait skipifsilent
+#endif
 
 [Code]
 var
