@@ -621,7 +621,22 @@ bool Game::Initialize() {
 	cbSkin = env->addComboBox(irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, COMBOBOX_SKIN);
 	cbSkin->setMaxSelectionRows(8);
 	RefreshSkins();
-	elmTabSystemLast = cbSkin;
+	posY += 30;
+	env->addStaticText(L"分辨率", irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
+	cbResolution = env->addComboBox(irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, COMBOBOX_RESOLUTION);
+	cbResolution->addItem(L"1280x720", 720);
+	cbResolution->addItem(L"1600x900", 900);
+	cbResolution->addItem(L"1920x1080", 1080);
+	cbResolution->addItem(L"2560x1440", 1440);
+	cbResolution->setMaxSelectionRows(4);
+	{
+		int resIdx = 0;
+		if(gameConf.resolution_preset == 900) resIdx = 1;
+		else if(gameConf.resolution_preset == 1080) resIdx = 2;
+		else if(gameConf.resolution_preset == 1440) resIdx = 3;
+		cbResolution->setSelected(resIdx);
+	}
+	elmTabSystemLast = cbResolution;
 	//
 	wHand = env->addWindow(irr::core::rect<irr::s32>(500, 450, 825, 605), false, L"");
 	wHand->getCloseButton()->setVisible(false);
@@ -2269,6 +2284,17 @@ void Game::SaveConfig() {
 #endif
 	std::fprintf(fp, "enable_pendulum_scale = %d\n", ((mainGame->chkEnablePScale->isChecked()) ? 1 : 0));
 	std::fprintf(fp, "skin_index = %d\n", gameConf.skin_index);
+	std::fprintf(fp, "resolution_preset = %d\n", gameConf.resolution_preset);
+	std::fprintf(fp, "cam_x = %.3f\n", gameConf.cam_x);
+	std::fprintf(fp, "cam_y = %.3f\n", gameConf.cam_y);
+	std::fprintf(fp, "cam_z = %.3f\n", gameConf.cam_z);
+	std::fprintf(fp, "cam_look_x = %.3f\n", gameConf.cam_look_x);
+	std::fprintf(fp, "cam_look_y = %.3f\n", gameConf.cam_look_y);
+	std::fprintf(fp, "cam_look_z = %.3f\n", gameConf.cam_look_z);
+	std::fprintf(fp, "proj_left = %.3f\n", gameConf.proj_left);
+	std::fprintf(fp, "proj_right = %.3f\n", gameConf.proj_right);
+	std::fprintf(fp, "proj_bottom = %.3f\n", gameConf.proj_bottom);
+	std::fprintf(fp, "proj_top = %.3f\n", gameConf.proj_top);
 	BufferIO::EncodeUTF8(gameConf.locale, linebuf);
 	std::fprintf(fp, "locale = %s\n", linebuf);
 	std::fclose(fp);
@@ -2294,6 +2320,14 @@ void Game::ShowCardInfo(int code, bool resize) {
 	else
 		stName->setToolTipText(nullptr);
 	int offset = 0;
+	irr::s32 fontH = static_cast<irr::s32>(guiFont->getDimension(L"A").Height);
+	irr::s32 lineH = std::max<irr::s32>(23, fontH + 6);
+	irr::s32 infoTop = stName->getRelativePosition().LowerRightCorner.Y + 6;
+	irr::s32 sbW = std::max<irr::s32>(16, env->getSkin()->getSize(irr::gui::EGDS_SCROLLBAR_SIZE));
+	irr::s32 textBot = wInfos->getRelativePosition().getHeight() - wInfos->getTabHeight() - 12;
+	if(textBot < infoTop + lineH * 3)
+		textBot = static_cast<irr::s32>(324 * yScale);
+	int offset = 0;
 	if (is_valid && !gameConf.hide_setname) {
 		auto& cd = cit->second;
 		auto target = cit;
@@ -2301,7 +2335,7 @@ void Game::ShowCardInfo(int code, bool resize) {
 			target = _datas.find(cd.rule_code);
 		}
 		if (target->second.setcode[0]) {
-			offset = 23;// *yScale;
+			offset = lineH;
 			const auto& setname = dataManager.FormatSetName(target->second.setcode);
 			myswprintf(formatBuffer, L"%ls%ls", dataManager.GetSysString(1329), setname.c_str());
 			stSetName->setText(formatBuffer);
@@ -2322,7 +2356,7 @@ void Game::ShowCardInfo(int code, bool resize) {
 		int offset_info = 0;
 		irr::core::dimension2d<unsigned int> dtxt = guiFont->getDimension(formatBuffer);
 		if(dtxt.Width > (300 * xScale - 13) - 15)
-			offset_info = 15;
+			offset_info = lineH;
 		const wchar_t* form = L"\u2605";
 		wchar_t adBuffer[64]{};
 		wchar_t scaleBuffer[16]{};
@@ -2353,12 +2387,14 @@ void Game::ShowCardInfo(int code, bool resize) {
 		int offset_arrows = offset_info;
 		dtxt = guiFont->getDimension(formatBuffer);
 		if(dtxt.Width > (300 * xScale - 13) - 15)
-			offset_arrows += 15;
-		stInfo->setRelativePosition(irr::core::rect<irr::s32>(15, 37, 300 * xScale - 13, (60 + offset_info)));
-		stDataInfo->setRelativePosition(irr::core::rect<irr::s32>(15, (60 + offset_info), 300 * xScale - 13, (83 + offset_arrows)));
-		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, (83 + offset_arrows), 296 * xScale, (83 + offset_arrows) + offset));
-		stText->setRelativePosition(irr::core::rect<irr::s32>(15, (83 + offset_arrows) + offset, 287 * xScale, 324 * yScale));
-		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(287 * xScale - 20, (83 + offset_arrows) + offset, 287 * xScale, 324 * yScale));
+			offset_arrows += lineH;
+		irr::s32 y1 = infoTop + lineH + offset_info;
+		irr::s32 y2 = infoTop + lineH * 2 + offset_arrows;
+		stInfo->setRelativePosition(irr::core::rect<irr::s32>(15, infoTop, static_cast<irr::s32>(300 * xScale) - 13, y1));
+		stDataInfo->setRelativePosition(irr::core::rect<irr::s32>(15, y1, static_cast<irr::s32>(300 * xScale) - 13, y2));
+		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, y2, static_cast<irr::s32>(296 * xScale), y2 + offset));
+		stText->setRelativePosition(irr::core::rect<irr::s32>(15, y2 + offset, static_cast<irr::s32>(287 * xScale) - sbW - 2, textBot));
+		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(static_cast<irr::s32>(287 * xScale) - sbW, y2 + offset, static_cast<irr::s32>(287 * xScale), textBot));
 	}
 	else {
 		if (is_valid) {
@@ -2369,9 +2405,11 @@ void Game::ShowCardInfo(int code, bool resize) {
 			myswprintf(formatBuffer, L"[%ls]", dataManager.unknown_string);
 		stInfo->setText(formatBuffer);
 		stDataInfo->setText(L"");
-		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, 60, 296 * xScale, 60 + offset));
-		stText->setRelativePosition(irr::core::rect<irr::s32>(15, 60 + offset, 287 * xScale, 324 * yScale));
-		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(287 * xScale - 20, 60 + offset, 287 * xScale, 324 * yScale));
+		irr::s32 y1 = infoTop + lineH;
+		stInfo->setRelativePosition(irr::core::rect<irr::s32>(15, infoTop, static_cast<irr::s32>(300 * xScale) - 13, y1));
+		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, y1, static_cast<irr::s32>(296 * xScale), y1 + offset));
+		stText->setRelativePosition(irr::core::rect<irr::s32>(15, y1 + offset, static_cast<irr::s32>(287 * xScale) - sbW - 2, textBot));
+		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(static_cast<irr::s32>(287 * xScale) - sbW, y1 + offset, static_cast<irr::s32>(287 * xScale), textBot));
 	}
 	showingcode = code;
 	showingtext = dataManager.GetText(code);
@@ -2660,6 +2698,98 @@ void Game::SwapYesNoButtons(bool no_first) {
 		btnDMCancel->setRelativePosition(irr::core::rect<irr::s32>(170, 80, 240, 105));
 	}
 }
+static std::unordered_map<irr::gui::IGUIElement*, irr::core::recti> g_baseGuiRects;
+static std::unordered_map<irr::gui::IGUIElement*, irr::s32> g_baseTabHeights;
+
+static void ScaleGuiChildren(irr::gui::IGUIElement* parent, float scale, irr::s32 listItemHeight) {
+	if(!parent)
+		return;
+	const auto& children = parent->getChildren();
+	for(auto it = children.begin(); it != children.end(); ++it) {
+		irr::gui::IGUIElement* child = *it;
+		if(!child || child->isSubElement())
+			continue;
+		auto type = child->getType();
+		if(type != irr::gui::EGUIET_TAB) {
+			auto found = g_baseGuiRects.find(child);
+			if(found == g_baseGuiRects.end()) {
+				found = g_baseGuiRects.emplace(child, child->getRelativePosition()).first;
+			}
+			const irr::core::recti& b = found->second;
+			child->setRelativePosition(irr::core::recti(
+				static_cast<irr::s32>(b.UpperLeftCorner.X * scale + 0.5f),
+				static_cast<irr::s32>(b.UpperLeftCorner.Y * scale + 0.5f),
+				static_cast<irr::s32>(b.LowerRightCorner.X * scale + 0.5f),
+				static_cast<irr::s32>(b.LowerRightCorner.Y * scale + 0.5f)));
+		}
+		if(type == irr::gui::EGUIET_TAB_CONTROL) {
+			auto* tc = static_cast<irr::gui::IGUITabControl*>(child);
+			auto tf = g_baseTabHeights.find(child);
+			if(tf == g_baseTabHeights.end()) {
+				irr::s32 h = tc->getTabHeight();
+				tf = g_baseTabHeights.emplace(child, h > 0 ? h : 20).first;
+			}
+			tc->setTabHeight(static_cast<irr::s32>(tf->second * scale + 0.5f));
+		} else if(type == irr::gui::EGUIET_LIST_BOX) {
+			static_cast<irr::gui::IGUIListBox*>(child)->setItemHeight(listItemHeight);
+		}
+		ScaleGuiChildren(child, scale, listItemHeight);
+	}
+}
+
+void Game::ApplyResolutionPreset(int preset) {
+	switch(preset) {
+		case 720:
+			gameConf.resolution_preset = 720;
+			gameConf.window_width = 1280;
+			gameConf.window_height = 720;
+			break;
+		case 900:
+			gameConf.resolution_preset = 900;
+			gameConf.window_width = 1600;
+			gameConf.window_height = 900;
+			break;
+		case 1080:
+			gameConf.resolution_preset = 1080;
+			gameConf.window_width = 1920;
+			gameConf.window_height = 1080;
+			break;
+		case 1440:
+			gameConf.resolution_preset = 1440;
+			gameConf.window_width = 2560;
+			gameConf.window_height = 1440;
+			break;
+		default:
+			return;
+	}
+	gameConf.window_maximized = false;
+#ifdef _WIN32
+	if(hWnd) {
+		int scrW = GetSystemMetrics(SM_CXSCREEN);
+		int scrH = GetSystemMetrics(SM_CYSCREEN);
+		if(gameConf.window_width >= scrW && gameConf.window_height >= scrH) {
+			SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+			SetWindowPos(hWnd, HWND_TOP, 0, 0, scrW, scrH, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+		} else {
+			DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
+			SetWindowLongPtr(hWnd, GWL_STYLE, style);
+			RECT rc = { 0, 0, gameConf.window_width, gameConf.window_height };
+			DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hWnd, GWL_EXSTYLE));
+			AdjustWindowRectEx(&rc, style, FALSE, exStyle);
+			int winW = rc.right - rc.left;
+			int winH = rc.bottom - rc.top;
+			int posX = (scrW - winW) / 2;
+			int posY = (scrH - winH) / 2;
+			if(posX < 0) posX = 0;
+			if(posY < 0) posY = 0;
+			SetWindowPos(hWnd, HWND_NOTOPMOST, posX, posY, winW, winH, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+		}
+	}
+#endif
+	if(driver) {
+		driver->OnResize(irr::core::dimension2d<irr::u32>(gameConf.window_width, gameConf.window_height));
+	}
+}
 void Game::OnResize() {
 #ifdef _WIN32
 	WINDOWPLACEMENT plc;
@@ -2684,6 +2814,31 @@ void Game::OnResize() {
 	old_adFont->drop();
 	old_lpcFont->drop();
 	old_textFont->drop();
+	float uiScale = std::min(xScale, yScale);
+	irr::u32 scaledGuiSize = std::max<irr::u32>(10, static_cast<irr::u32>(gameConf.textfontsize * uiScale * 0.92f + 0.5f));
+	irr::gui::CGUITTFont* new_guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, scaledGuiSize);
+	if(new_guiFont) {
+		irr::gui::CGUITTFont* old_guiFont = guiFont;
+		guiFont = new_guiFont;
+		env->getSkin()->setFont(guiFont);
+		if(old_guiFont)
+			old_guiFont->drop();
+	}
+	env->getSkin()->setSize(irr::gui::EGDS_WINDOW_BUTTON_WIDTH, static_cast<irr::s32>(15 * uiScale + 0.5f));
+	env->getSkin()->setSize(irr::gui::EGDS_CHECK_BOX_WIDTH, static_cast<irr::s32>(18 * uiScale + 0.5f));
+	wInfos->setTabHeight(static_cast<irr::s32>(24 * uiScale + 0.5f));
+	irr::s32 listItemH = static_cast<irr::s32>(guiFont->getDimension(L"A").Height) + 6;
+	irr::gui::IGUIElement* scaledPanels[] = {
+		wMainMenu, wDeckManage, wCategories, wLinkMarks,
+		wLanWindow, wCreateHost, wHostPrepare, wReplay, wSinglePlay,
+		wHand, wFTSelect, wMessage, wACMessage, wQuery, wSurrender, wOptions,
+		wANNumber, wANCard, wANAttribute, wANRace, wReplaySave, wDeckCode, wDMQuery,
+		tabHelper, tabSystem
+	};
+	for(auto* panel : scaledPanels) {
+		ScaleGuiChildren(panel, uiScale, listItemH);
+	}
+	lstLog->setItemHeight(listItemH);
 
 	imageManager.ClearTexture();
 	imageManager.ResizeTexture();
@@ -2737,11 +2892,19 @@ void Game::OnResize() {
 	btnMarksFilter->setRelativePosition(Resize(60, 80 + 125 / 6, 195, 100 + 125 / 6));
 
 	irr::core::recti btncatepos = btnEffectFilter->getAbsolutePosition();
-	wCategories->setRelativePosition(irr::core::recti(
-		btncatepos.LowerRightCorner.X - wCategories->getRelativePosition().getWidth(),
-		btncatepos.LowerRightCorner.Y - btncatepos.getHeight() / 2,
-		btncatepos.LowerRightCorner.X,
-		btncatepos.LowerRightCorner.Y - btncatepos.getHeight() / 2 + 245));
+	{
+		auto found = g_baseGuiRects.find(wCategories);
+		if(found == g_baseGuiRects.end())
+			found = g_baseGuiRects.emplace(wCategories, wCategories->getRelativePosition()).first;
+		irr::s32 catW = static_cast<irr::s32>(found->second.getWidth() * uiScale + 0.5f);
+		irr::s32 catH = static_cast<irr::s32>(245 * uiScale + 0.5f);
+		irr::core::recti btncatepos = btnEffectFilter->getAbsolutePosition();
+		wCategories->setRelativePosition(irr::core::recti(
+			btncatepos.LowerRightCorner.X - catW,
+			btncatepos.LowerRightCorner.Y - btncatepos.getHeight() / 2,
+			btncatepos.LowerRightCorner.X,
+			btncatepos.LowerRightCorner.Y - btncatepos.getHeight() / 2 + catH));
+	}
 
 	wLinkMarks->setRelativePosition(ResizeWin(700, 30, 820, 150));
 	stDBCategory->setRelativePosition(Resize(10, 9, 100, 29));
@@ -2789,13 +2952,14 @@ void Game::OnResize() {
 	if(wCardDisplay->isVisible())
 		ResizeCardSelectButtons(wCardDisplay, stDisplayPos, btnCardDisplay, scrDisplayList, btnDisplayOK, dField.display_cards);
 
-	stHintMsg->setRelativePosition(ResizeWin(660 - 160 * xScale, 60, 660 + 160 * xScale, 90));
+	stHintMsg->setRelativePosition(ResizeWin(500, 60, 820, 90));
 
 	//sound / music volume bar
 	scrSoundVolume->setRelativePosition(irr::core::recti(scrSoundVolume->getRelativePosition().UpperLeftCorner.X, scrSoundVolume->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrSoundVolume->getRelativePosition().LowerRightCorner.Y));
 	scrMusicVolume->setRelativePosition(irr::core::recti(scrMusicVolume->getRelativePosition().UpperLeftCorner.X, scrMusicVolume->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrMusicVolume->getRelativePosition().LowerRightCorner.Y));
 	cbLocale->setRelativePosition(irr::core::recti(cbLocale->getRelativePosition().UpperLeftCorner.X, cbLocale->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbLocale->getRelativePosition().LowerRightCorner.Y));
 	cbSkin->setRelativePosition(irr::core::recti(cbSkin->getRelativePosition().UpperLeftCorner.X, cbSkin->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbSkin->getRelativePosition().LowerRightCorner.Y));
+	cbResolution->setRelativePosition(irr::core::recti(cbResolution->getRelativePosition().UpperLeftCorner.X, cbResolution->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbResolution->getRelativePosition().LowerRightCorner.Y));
 	scrResizePopupMenu->setRelativePosition(irr::core::recti(scrResizePopupMenu->getRelativePosition().UpperLeftCorner.X, scrResizePopupMenu->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrResizePopupMenu->getRelativePosition().LowerRightCorner.Y));
 
 	irr::core::recti tabHelperPos = irr::core::recti(0, 0, 300 * xScale - 50, 365 * yScale - 65);
@@ -2824,8 +2988,7 @@ void Game::OnResize() {
 	wCardImg->setRelativePosition(ResizeCardImgWin(1, 1, 20, 18));
 	imgCard->setRelativePosition(ResizeCardImgWin(10, 9, 0, 0));
 	wInfos->setRelativePosition(Resize(1, 275, 301, 639));
-	stName->setRelativePosition(irr::core::recti(10, 10, 300 * xScale - 13, 10 + 22));
-	lstLog->setRelativePosition(Resize(10, 10, 290, 290));
+	stName->setRelativePosition(irr::core::recti(10, 10, static_cast<irr::s32>(300 * xScale) - 13, 10 + static_cast<irr::s32>(24 * uiScale + 0.5f)));	lstLog->setRelativePosition(Resize(10, 10, 290, 290));
 	if(showingcode)
 		ShowCardInfo(showingcode, true);
 	else
@@ -2986,13 +3149,12 @@ irr::core::vector2di Game::ResizeReverse(irr::s32 x, irr::s32 y) {
 	return irr::core::vector2di(x, y);
 }
 irr::core::recti Game::ResizeWin(irr::s32 x, irr::s32 y, irr::s32 x2, irr::s32 y2) {
-	irr::s32 w = x2 - x;
-	irr::s32 h = y2 - y;
-	x = (x + w / 2) * xScale - w / 2;
-	y = (y + h / 2) * yScale - h / 2;
-	x2 = w + x;
-	y2 = h + y;
-	return irr::core::recti(x, y, x2, y2);
+	float s = std::min(xScale, yScale);
+	irr::s32 w = static_cast<irr::s32>((x2 - x) * s + 0.5f);
+	irr::s32 h = static_cast<irr::s32>((y2 - y) * s + 0.5f);
+	irr::s32 cx = static_cast<irr::s32>((x + (x2 - x) * 0.5f) * xScale + 0.5f);
+	irr::s32 cy = static_cast<irr::s32>((y + (y2 - y) * 0.5f) * yScale + 0.5f);
+	return irr::core::recti(cx - w / 2, cy - h / 2, cx - w / 2 + w, cy - h / 2 + h);
 }
 irr::core::recti Game::ResizePhaseHint(irr::s32 x, irr::s32 y, irr::s32 x2, irr::s32 y2, irr::s32 width) {
 	x = x * xScale - width / 2;
