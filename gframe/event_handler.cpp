@@ -1958,6 +1958,16 @@ bool ClientField::OnCommonEvent(const irr::SEvent& event) {
 				return true;
 				break;
 			}
+				case COMBOBOX_RESOLUTION: {
+				int selected = mainGame->cbResolution->getSelected();
+				if(selected >= 0) {
+					int preset = static_cast<int>(mainGame->cbResolution->getItemData(selected));
+					mainGame->ApplyResolutionPreset(preset);
+					mainGame->SaveConfig();
+				}
+				return true;
+				break;
+			}
 			}
 			break;
 		}
