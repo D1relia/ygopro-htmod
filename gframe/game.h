@@ -132,14 +132,14 @@ struct Config {
 	// custom mod: resolution & camera
 	int resolution_preset{ 0 };
 	bool modern_ui{ true };
-	float cam_x{ 4.2f };
+	float cam_x{ 3.95f };
 	float cam_y{ 5.5f };
 	float cam_z{ 9.6f };
-	float cam_look_x{ 4.2f };
+	float cam_look_x{ 3.95f };
 	float cam_look_y{ 0.4f };
 	float cam_look_z{ 0.0f };
-	float proj_left{ -0.97f };
-	float proj_right{ 0.52f };
+	float proj_left{ -0.96f };
+	float proj_right{ 0.53f };
 	float proj_bottom{ -0.42f };
 	float proj_top{ 0.42f };
 };
