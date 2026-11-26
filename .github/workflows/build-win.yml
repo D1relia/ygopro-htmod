@@ -1,0 +1,113 @@
+name: Build Windows Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  build-win:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Prepare dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # 1. 下载 Premake5
+          curl.exe -fL -o premake5.zip "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip"
+          7z x premake5.zip -opremake-5 -y | Out-Null
+
+          # 2. 若 ocgcore 子模块未拉取完整，自动补拉
+          if (-not (Test-Path "ocgcore/ocgapi.h")) {
+            Remove-Item -Recurse -Force ocgcore -ErrorAction SilentlyContinue
+            git clone --depth 1 https://github.com/Fluorohydride/ygopro-core.git ocgcore
+          }
+
+          # 3. 补齐源码依赖（仅在对应目录缺失时下载）
+          if (-not (Test-Path "lua/src/lua.h")) {
+            Remove-Item -Recurse -Force lua -ErrorAction SilentlyContinue
+            curl.exe -fL -o lua.tar.gz "https://www.lua.org/ftp/lua-5.4.8.tar.gz"
+            tar -xzf lua.tar.gz
+            Move-Item lua-5.4.8 lua
+          }
+
+          if (-not (Test-Path "freetype/include")) {
+            Remove-Item -Recurse -Force freetype -ErrorAction SilentlyContinue
+            curl.exe -fL -o freetype.tar.gz "https://github.com/freetype/freetype/archive/refs/tags/VER-2-13-3.tar.gz"
+            tar -xzf freetype.tar.gz
+            Move-Item freetype-VER-2-13-3 freetype
+          }
+
+          if (-not (Test-Path "libevent/include")) {
+            Remove-Item -Recurse -Force libevent -ErrorAction SilentlyContinue
+            curl.exe -fL -o libevent.tar.gz "https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz"
+            tar -xzf libevent.tar.gz
+            Move-Item libevent-2.1.12-stable libevent
+          }
+
+          if (-not (Test-Path "sqlite3/sqlite3.h")) {
+            Remove-Item -Recurse -Force sqlite3 -ErrorAction SilentlyContinue
+            curl.exe -fL -o sqlite3.zip "https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip"
+            7z x sqlite3.zip -y | Out-Null
+            Move-Item sqlite-amalgamation-3460100 sqlite3
+          }
+
+          if (-not (Test-Path "irrlicht/include")) {
+            Remove-Item -Recurse -Force irrlicht -ErrorAction SilentlyContinue
+            curl.exe -fL -o irrlicht.zip "https://downloads.sourceforge.net/project/irrlicht/Irrlicht%20SDK/1.8/1.8.5/irrlicht-1.8.5.zip"
+            7z x irrlicht.zip -y | Out-Null
+            Move-Item irrlicht-1.8.5 irrlicht
+          }
+
+          if (-not (Test-Path "miniaudio/miniaudio.h")) {
+            Remove-Item -Recurse -Force miniaudio -ErrorAction SilentlyContinue
+            curl.exe -fL -o miniaudio.tar.gz "https://github.com/mackron/miniaudio/archive/refs/tags/0.11.21.tar.gz"
+            tar -xzf miniaudio.tar.gz
+            Move-Item miniaudio-0.11.21 miniaudio
+          }
+
+          # 4. 复制仓库 premake/ 下的子工程配置到各依赖目录
+          $deps = @("lua", "freetype", "libevent", "sqlite3", "irrlicht", "miniaudio", "ocgcore")
+          foreach ($d in $deps) {
+            if (Test-Path "premake/$d/premake5.lua") {
+              Copy-Item "premake/$d/premake5.lua" "$d/premake5.lua" -Force
+            } elseif (Test-Path "premake/$d.lua") {
+              Copy-Item "premake/$d.lua" "$d/premake5.lua" -Force
+            }
+          }
+
+          # 5. 仅在本次云端构建中关闭 DirectX SDK 依赖，改用 OpenGL
+          if (Test-Path "premake5.lua") {
+            (Get-Content "premake5.lua" -Raw) -replace 'USE_DXSDK\s*=\s*true', 'USE_DXSDK = false' | Set-Content "premake5.lua"
+          }
+
+      - name: Generate Visual Studio project
+        shell: pwsh
+        run: |
+          .\premake-5\premake5.exe vs2022
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build ygopro.exe (Release x64)
+        shell: pwsh
+        run: |
+          $sln = Get-ChildItem -Path build -Filter *.sln | Select-Object -First 1
+          if (-not $sln) { throw "未在 build 目录找到 .sln 工程文件" }
+          msbuild $sln.FullName /m /t:Build /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload ygopro.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: ygopro-windows-x64
+          path: |
+            bin/**/ygopro.exe
+            build/bin/**/ygopro.exe
+          if-no-files-found: error
