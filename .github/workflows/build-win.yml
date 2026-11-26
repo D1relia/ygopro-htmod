@@ -273,7 +273,7 @@ jobs:
         with:
           url: https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip
           filename: premake5.zip
-          sha256: e64ce2ed8778e0098f3e674cca61fe33941b5f0c8d9a4afd651152bdea3758ab
+          sha256: e64ce2ed8778e0098f63674cca61fe33941b5f0c8d9a4afd651152bdea3758ab
 
       - name: Extract premake
         shell: bash
