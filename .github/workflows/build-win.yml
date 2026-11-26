@@ -16,11 +16,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Fetch ocgcore
+      - name: Checkout repository for submodule info
         uses: actions/checkout@v6
         with:
-          repository: Fluorohydride/ygopro-core
-          path: ocgcore
+          path: repo-meta
+          submodules: false
+
+      - name: Fetch KoishiPro ocgcore
+        run: |
+          cd repo-meta
+          URL=$(git config --file .gitmodules --get submodule.ocgcore.url || true)
+          BRANCH=$(git config --file .gitmodules --get submodule.ocgcore.branch || true)
+          echo "Detected ocgcore URL: $URL (branch: $BRANCH)"
+          if [ -z "$URL" ]; then
+            rm -rf ocgcore
+            git clone --depth 1 https://github.com/purerosefallen/ygopro-core.git ocgcore
+          else
+            if [[ "$URL" == ../* ]]; then
+              URL="https://github.com/purerosefallen/${URL#../}"
+            elif [[ "$URL" == git@github.com:* ]]; then
+              URL="https://github.com/${URL#git@github.com:}"
+            fi
+            git submodule init ocgcore || true
+            git config submodule.ocgcore.url "$URL" || true
+            if ! git submodule update ocgcore; then
+              rm -rf ocgcore
+              if [ -n "$BRANCH" ]; then
+                git clone --depth 1 -b "$BRANCH" "$URL" ocgcore
+              else
+                git clone --depth 1 "$URL" ocgcore
+              fi
+            fi
+          fi
+          cd ..
+          mv repo-meta/ocgcore ./ocgcore
+          rm -rf ./ocgcore/.git
 
       - name: Fetch Irrlicht
         uses: actions/checkout@v6
