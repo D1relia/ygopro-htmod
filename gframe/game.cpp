@@ -252,7 +252,8 @@ bool Game::Initialize() {
 	}
 	adFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 12);
 	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 48);
-	guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, gameConf.textfontsize);
+	irr::u32 scaledGuiFontSize = static_cast<irr::u32>(gameConf.textfontsize * gameConf.window_height / 640.0f + 0.5f);
+	guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, scaledGuiFontSize);
 	smgr = device->getSceneManager();
 	device->setWindowCaption(L"KoishiPro-htmod");
 	device->setResizable(false);
