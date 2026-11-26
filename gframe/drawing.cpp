@@ -827,21 +827,21 @@ void Game::DrawMisc() {
 		auto DrawHudCard = [&](const irr::core::recti& rc, int rad, bool active, irr::video::SColor activeCol) {
 			for(int s = 3; s >= 1; --s) {
 				irr::core::recti sh(rc.UpperLeftCorner.X - s, rc.UpperLeftCorner.Y - s + 2, rc.LowerRightCorner.X + s, rc.LowerRightCorner.Y + s + 2);
-				DrawHudPill(sh, rad + s, irr::video::SColor(20 - s * 4, 15, 23, 42), irr::video::SColor(0, 0, 0, 0));
+				DrawHudPill(sh, rad + s, irr::video::SColor(36 - s * 8, 2, 6, 16), irr::video::SColor(0, 0, 0, 0));
 			}
-			irr::video::SColor bg = active ? irr::video::SColor(242, 250, 252, 255) : irr::video::SColor(225, 248, 250, 252);
-			irr::video::SColor bd = active ? activeCol : irr::video::SColor(205, 203, 213, 225);
+			irr::video::SColor bg = active ? irr::video::SColor(242, 28, 39, 58) : irr::video::SColor(225, 22, 30, 44);
+			irr::video::SColor bd = active ? activeCol : irr::video::SColor(195, 56, 70, 94);
 			DrawHudPill(rc, rad, bg, bd);
 			if(active) {
 				irr::core::recti inner(rc.UpperLeftCorner.X + 1, rc.UpperLeftCorner.Y + 1, rc.LowerRightCorner.X - 1, rc.LowerRightCorner.Y - 1);
-				DrawHudPill(inner, std::max(1, rad - 1), irr::video::SColor(0, 0, 0, 0), irr::video::SColor(110, activeCol.getRed(), activeCol.getGreen(), activeCol.getBlue()));
+				DrawHudPill(inner, std::max(1, rad - 1), irr::video::SColor(0, 0, 0, 0), irr::video::SColor(100, activeCol.getRed(), activeCol.getGreen(), activeCol.getBlue()));
 			}
 		};
 		auto FixHudColor = [](irr::video::SColor c) -> irr::video::SColor {
-			if(c.getRed() > 210 && c.getGreen() > 210 && c.getBlue() > 210)
-				return irr::video::SColor(255, 30, 41, 59);
-			if(c.getRed() > 210 && c.getGreen() > 200 && c.getBlue() < 80)
-				return irr::video::SColor(255, 217, 119, 6);
+			if(c.getRed() > 200 && c.getGreen() < 80 && c.getBlue() < 80)
+				return irr::video::SColor(255, 255, 107, 107);
+			if(c.getRed() < 80 && c.getGreen() < 80 && c.getBlue() < 80)
+				return irr::video::SColor(255, 226, 232, 240);
 			return c;
 		};
 
@@ -850,15 +850,15 @@ void Game::DrawMisc() {
 		irr::core::recti cardP0 = Resize(324, 6, 628, 56);
 		irr::core::recti cardP1 = Resize(692, 6, 996, 56);
 		irr::core::recti cardTurn = Resize(634, 6, 686, 56);
-		DrawHudCard(cardP0, cardRad, isP0Turn, irr::video::SColor(255, 0, 122, 255));
-		DrawHudCard(cardP1, cardRad, !isP0Turn, irr::video::SColor(255, 239, 68, 68));
-		DrawHudCard(cardTurn, cardRad, false, irr::video::SColor(205, 203, 213, 225));
+		DrawHudCard(cardP0, cardRad, isP0Turn, irr::video::SColor(255, 10, 132, 255));
+		DrawHudCard(cardP1, cardRad, !isP0Turn, irr::video::SColor(255, 255, 69, 58));
+		DrawHudCard(cardTurn, cardRad, false, irr::video::SColor(195, 56, 70, 94));
 
 		// Sleek rounded LP progress bars
 		irr::core::recti trackP0 = Resize(334, 30, 618, 37);
 		irr::core::recti trackP1 = Resize(702, 30, 986, 37);
-		DrawHudPill(trackP0, barRad, irr::video::SColor(255, 226, 232, 240), irr::video::SColor(0, 0, 0, 0));
-		DrawHudPill(trackP1, barRad, irr::video::SColor(255, 226, 232, 240), irr::video::SColor(0, 0, 0, 0));
+		DrawHudPill(trackP0, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
+		DrawHudPill(trackP1, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
 		if(dInfo.start_lp > 0) {
 			auto maxLP = dInfo.isTag ? std::max(dInfo.start_lp / 2, 1) : dInfo.start_lp;
 			int maxW0 = trackP0.getWidth();
@@ -866,14 +866,14 @@ void Game::DrawMisc() {
 			if(dInfo.lp[0] > 0) {
 				int w0 = (dInfo.lp[0] >= maxLP) ? maxW0 : (int)((long long)maxW0 * dInfo.lp[0] / maxLP);
 				if(w0 > 0) {
-					irr::video::SColor col0 = (dInfo.lp[0] > maxLP) ? irr::video::SColor(255, 16, 185, 129) : irr::video::SColor(255, 0, 122, 255);
+					irr::video::SColor col0 = (dInfo.lp[0] > maxLP) ? irr::video::SColor(255, 48, 209, 88) : irr::video::SColor(255, 10, 132, 255);
 					DrawHudPill(irr::core::recti(trackP0.UpperLeftCorner.X, trackP0.UpperLeftCorner.Y, trackP0.UpperLeftCorner.X + w0, trackP0.LowerRightCorner.Y), barRad, col0, irr::video::SColor(0, 0, 0, 0));
 				}
 			}
 			if(dInfo.lp[1] > 0) {
 				int w1 = (dInfo.lp[1] >= maxLP) ? maxW1 : (int)((long long)maxW1 * dInfo.lp[1] / maxLP);
 				if(w1 > 0) {
-					irr::video::SColor col1 = (dInfo.lp[1] > maxLP) ? irr::video::SColor(255, 245, 158, 11) : irr::video::SColor(255, 239, 68, 68);
+					irr::video::SColor col1 = (dInfo.lp[1] > maxLP) ? irr::video::SColor(255, 255, 159, 10) : irr::video::SColor(255, 255, 69, 58);
 					DrawHudPill(irr::core::recti(trackP1.LowerRightCorner.X - w1, trackP1.UpperLeftCorner.Y, trackP1.LowerRightCorner.X, trackP1.LowerRightCorner.Y), barRad, col1, irr::video::SColor(0, 0, 0, 0));
 				}
 			}
@@ -884,21 +884,21 @@ void Game::DrawMisc() {
 			irr::core::recti p1size = Resize(335, 9, 540, 29);
 			irr::core::recti p2size = Resize(985, 9, 985, 29);
 			if(!dInfo.isTag || !dInfo.tag_player[0])
-				textFont->drawUstring(dInfo.hostname, p1size, 0xff0f172a, false, false, 0);
+				textFont->drawUstring(dInfo.hostname, p1size, 0xfff1f5f9, false, false, 0);
 			else
-				textFont->drawUstring(dInfo.hostname_tag, p1size, 0xff0f172a, false, false, 0);
+				textFont->drawUstring(dInfo.hostname_tag, p1size, 0xfff1f5f9, false, false, 0);
 			if(!dInfo.isTag || !dInfo.tag_player[1]) {
 				auto cld = textFont->getDimension(dInfo.clientname);
 				p2size.UpperLeftCorner.X -= cld.Width;
-				textFont->drawUstring(dInfo.clientname, p2size, 0xff0f172a, false, false, 0);
+				textFont->drawUstring(dInfo.clientname, p2size, 0xfff1f5f9, false, false, 0);
 			} else {
 				auto cld = textFont->getDimension(dInfo.clientname_tag);
 				p2size.UpperLeftCorner.X -= cld.Width;
-				textFont->drawUstring(dInfo.clientname_tag, p2size, 0xff0f172a, false, false, 0);
+				textFont->drawUstring(dInfo.clientname_tag, p2size, 0xfff1f5f9, false, false, 0);
 			}
 		}
-		DrawShadowText(numFont, dInfo.strLP[0], Resize(540, 8, 622, 28), Resize(0, 0, 0, 0), 0xff0066cc, 0x00000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.strLP[1], Resize(698, 8, 780, 28), Resize(0, 0, 0, 0), 0xffdc2626, 0x00000000, true, false, 0);
+		DrawShadowText(numFont, dInfo.strLP[0], Resize(540, 8, 622, 28), Resize(0, 0, 0, 0), 0xff38bdf8, 0x00000000, true, false, 0);
+		DrawShadowText(numFont, dInfo.strLP[1], Resize(698, 8, 780, 28), Resize(0, 0, 0, 0), 0xfff87171, 0x00000000, true, false, 0);
 
 		// Bottom status row (time / cards / total ATK)
 		if(!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit) {
@@ -935,7 +935,7 @@ void Game::DrawMisc() {
 		}
 
 		// Clean Turn Badge
-		DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(634, 8, 686, 54), Resize(0, 0, 0, 0), isP0Turn ? 0xff007aff : 0xffef4444, 0x00000000, true, true, 0);
+		DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(634, 8, 686, 54), Resize(0, 0, 0, 0), isP0Turn ? 0xff38bdf8 : 0xfff87171, 0x00000000, true, true, 0);
 	} else {
 		if(isP0Turn) {
 			driver->draw2DRectangle(0xa0000000, Resize(327, 8, 630, 51));
@@ -1734,16 +1734,16 @@ void Game::DrawDeckBd() {
 	deckBuilder.layout.sr_row_h  = 66.0f * mul;
 	deckBuilder.layout.sr_top_px = 165.0f * yScale;
 
-	irr::video::SColor deckPanelTop = gameConf.modern_ui ? 0xdcf8fafc : 0x400000ff;
-	irr::video::SColor deckPanelBot = gameConf.modern_ui ? 0xe6f1f5f9 : 0x40000000;
-	irr::video::SColor deckHdrTop   = gameConf.modern_ui ? 0xeeffffff : 0x400000ff;
-	irr::video::SColor deckHdrBot   = gameConf.modern_ui ? 0xeef1f5f9 : 0x40000000;
-	irr::video::SColor deckBorder   = gameConf.modern_ui ? 0xffcbd5e1 : 0xffffffff;
-	irr::video::SColor deckHoverCol = gameConf.modern_ui ? 0xff007aff : 0xffffffff;
-	irr::video::SColor deckTextCol  = gameConf.modern_ui ? 0xff1e293b : 0xffffffff;
-	irr::video::SColor deckSubCol   = gameConf.modern_ui ? 0xff475569 : 0xffffffff;
-	irr::video::SColor deckShadCol  = gameConf.modern_ui ? 0x00000000 : 0xff000000;
-	irr::video::SColor srHoverBg    = gameConf.modern_ui ? 0x44007aff : 0x80000000;
+	irr::video::SColor deckPanelTop = gameConf.modern_ui ? 0xe618202e : 0x400000ff;
+	irr::video::SColor deckPanelBot = gameConf.modern_ui ? 0xee131a26 : 0x40000000;
+	irr::video::SColor deckHdrTop   = gameConf.modern_ui ? 0xf2212c3e : 0x400000ff;
+	irr::video::SColor deckHdrBot   = gameConf.modern_ui ? 0xf21b2434 : 0x40000000;
+	irr::video::SColor deckBorder   = gameConf.modern_ui ? 0xff38465e : 0xffffffff;
+	irr::video::SColor deckHoverCol = gameConf.modern_ui ? 0xff38bdf8 : 0xffffffff;
+	irr::video::SColor deckTextCol  = gameConf.modern_ui ? 0xfff1f5f9 : 0xffffffff;
+	irr::video::SColor deckSubCol   = gameConf.modern_ui ? 0xff94a3b8 : 0xffffffff;
+	irr::video::SColor deckShadCol  = gameConf.modern_ui ? 0x80000000 : 0xff000000;
+	irr::video::SColor srHoverBg    = gameConf.modern_ui ? 0x550a84ff : 0x80000000;
 
 	// ====== Main deck header (fixed position) ======
 	driver->draw2DRectangle(Resize(310, 137, 410, 157), deckHdrTop, deckHdrTop, deckHdrBot, deckHdrBot);
