@@ -857,9 +857,9 @@ void Game::DrawMisc() {
 
 		bool showTimer = (!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit);
 
-		// Shortened rounded LP progress bars (leaving inner side open for large LP number)
-		irr::core::recti trackP0 = showTimer ? Resize(330, 30, 516, 37) : Resize(330, 34, 516, 42);
-		irr::core::recti trackP1 = showTimer ? Resize(804, 30, 990, 37) : Resize(804, 34, 990, 42);
+		// Shortened rounded LP progress bars
+		irr::core::recti trackP0 = Resize(330, 33, 506, 41);
+		irr::core::recti trackP1 = Resize(814, 33, 990, 41);
 		DrawHudPill(trackP0, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
 		DrawHudPill(trackP1, barRad, irr::video::SColor(255, 38, 49, 68), irr::video::SColor(0, 0, 0, 0));
 		if(dInfo.start_lp > 0) {
@@ -884,8 +884,8 @@ void Game::DrawMisc() {
 
 		// Player names (outer top)
 		if(!gameConf.hide_player_name) {
-			irr::core::recti p1size = Resize(330, 9, 516, 27);
-			irr::core::recti p2size = Resize(990, 9, 990, 27);
+			irr::core::recti p1size = Resize(330, 10, 506, 28);
+			irr::core::recti p2size = Resize(990, 10, 990, 28);
 			if(!dInfo.isTag || !dInfo.tag_player[0])
 				textFont->drawUstring(dInfo.hostname, p1size, 0xfff1f5f9, false, false, 0);
 			else
@@ -901,14 +901,19 @@ void Game::DrawMisc() {
 			}
 		}
 
-		// Large borderless LP numbers on inner side
+		// Large borderless LP numbers (P0 right-aligned at X=610, P1 left-aligned at X=710)
 		auto* lpBigFont = lpcFont ? lpcFont : numFont;
-		irr::core::recti lpRect0 = showTimer ? Resize(518, 6, 614, 38) : Resize(518, 8, 614, 54);
-		irr::core::recti lpRect1 = showTimer ? Resize(706, 6, 802, 38) : Resize(706, 8, 802, 54);
-		DrawShadowText(lpBigFont, dInfo.strLP[0], lpRect0, Resize(0, 0, 0, 0), 0xff38bdf8, 0x00000000, true, true, 0);
-		DrawShadowText(lpBigFont, dInfo.strLP[1], lpRect1, Resize(0, 0, 0, 0), 0xfff87171, 0x00000000, true, true, 0);
+		int rightEdge0 = (int)(610.0f * xScale);
+		int leftEdge1 = (int)(710.0f * xScale);
+		int lpY1 = (int)((showTimer ? 6.0f : 8.0f) * yScale);
+		int lpY2 = (int)((showTimer ? 36.0f : 54.0f) * yScale);
+		int lpW0 = lpBigFont->getDimension(dInfo.strLP[0]).Width;
+		irr::core::recti lpRect0(rightEdge0 - lpW0, lpY1, rightEdge0, lpY2);
+		irr::core::recti lpRect1(leftEdge1, lpY1, (int)(810.0f * xScale), lpY2);
+		DrawShadowText(lpBigFont, dInfo.strLP[0], lpRect0, Resize(0, 0, 0, 0), 0xff38bdf8, 0x00000000, false, true, 0);
+		DrawShadowText(lpBigFont, dInfo.strLP[1], lpRect1, Resize(0, 0, 0, 0), 0xfff87171, 0x00000000, false, true, 0);
 
-		// Timer only: shrinking mini progress bar + remaining seconds at inner edge
+		// Short timer bars next to aligned timer numbers (P0 shrinks left->right, P1 shrinks right->left)
 		if(showTimer) {
 			static int s_maxTimeSeen = 0;
 			static int s_lastTurnForTimer = -1;
@@ -931,23 +936,26 @@ void Game::DrawMisc() {
 				return irr::video::SColor(255, 100, 210, 255);
 			};
 
-			irr::core::recti tTrack0 = Resize(330, 44, 516, 49);
-			irr::core::recti tTrack1 = Resize(804, 44, 990, 49);
+			irr::core::recti tTrack0 = Resize(514, 43, 568, 48);
+			irr::core::recti tTrack1 = Resize(752, 43, 806, 48);
 			DrawHudPill(tTrack0, timeBarRad, irr::video::SColor(255, 32, 42, 60), irr::video::SColor(0, 0, 0, 0));
 			DrawHudPill(tTrack1, timeBarRad, irr::video::SColor(255, 32, 42, 60), irr::video::SColor(0, 0, 0, 0));
 			if(t0 > 0) {
 				int tw0 = std::min(tTrack0.getWidth(), (int)((long long)tTrack0.getWidth() * t0 / timeDenom));
 				if(tw0 > 0)
-					DrawHudPill(irr::core::recti(tTrack0.UpperLeftCorner.X, tTrack0.UpperLeftCorner.Y, tTrack0.UpperLeftCorner.X + tw0, tTrack0.LowerRightCorner.Y), timeBarRad, PickTimerColor(t0), irr::video::SColor(0, 0, 0, 0));
+					DrawHudPill(irr::core::recti(tTrack0.LowerRightCorner.X - tw0, tTrack0.UpperLeftCorner.Y, tTrack0.LowerRightCorner.X, tTrack0.LowerRightCorner.Y), timeBarRad, PickTimerColor(t0), irr::video::SColor(0, 0, 0, 0));
 			}
 			if(t1 > 0) {
 				int tw1 = std::min(tTrack1.getWidth(), (int)((long long)tTrack1.getWidth() * t1 / timeDenom));
 				if(tw1 > 0)
-					DrawHudPill(irr::core::recti(tTrack1.LowerRightCorner.X - tw1, tTrack1.UpperLeftCorner.Y, tTrack1.LowerRightCorner.X, tTrack1.LowerRightCorner.Y), timeBarRad, PickTimerColor(t1), irr::video::SColor(0, 0, 0, 0));
+					DrawHudPill(irr::core::recti(tTrack1.UpperLeftCorner.X, tTrack1.UpperLeftCorner.Y, tTrack1.UpperLeftCorner.X + tw1, tTrack1.LowerRightCorner.Y), timeBarRad, PickTimerColor(t1), irr::video::SColor(0, 0, 0, 0));
 			}
 
-			DrawShadowText(numFont, dInfo.str_time_left[0], Resize(566, 38, 612, 54), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[0]), 0x00000000, true, true, 0);
-			DrawShadowText(numFont, dInfo.str_time_left[1], Resize(708, 38, 754, 54), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[1]), 0x00000000, true, true, 0);
+			int tmW0 = numFont->getDimension(dInfo.str_time_left[0]).Width;
+			irr::core::recti tmRect0(rightEdge0 - tmW0, (int)(37.0f * yScale), rightEdge0, (int)(53.0f * yScale));
+			irr::core::recti tmRect1(leftEdge1, (int)(37.0f * yScale), (int)(750.0f * xScale), (int)(53.0f * yScale));
+			DrawShadowText(numFont, dInfo.str_time_left[0], tmRect0, Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[0]), 0x00000000, false, true, 0);
+			DrawShadowText(numFont, dInfo.str_time_left[1], tmRect1, Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[1]), 0x00000000, false, true, 0);
 		}
 
 		// Turn Badge: "回合" header + large white turn number + colored directional arrow
