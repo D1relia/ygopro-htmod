@@ -259,7 +259,7 @@ bool Game::Initialize() {
 	irr::u32 scaledGuiFontSize = static_cast<irr::u32>(gameConf.textfontsize * gameConf.window_height / 640.0f + 0.5f);
 	guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, scaledGuiFontSize);
 	smgr = device->getSceneManager();
-	device->setWindowCaption(L"KoishiPro-htmod");
+	device->setWindowCaption(L"YGOPro KoishiPro-HTmod");
 	device->setResizable(false);
 #ifdef _WIN32
 	irr::video::SExposedVideoData exposedData = driver->getExposedVideoData();
@@ -443,7 +443,8 @@ bool Game::Initialize() {
 	btnServerReturn = env->addButton(irr::core::rect<irr::s32>(100, 280, 200, 310), wServerList, BUTTON_SERVER_RETURN, dataManager.GetSysString(1210));
 	//img
 	wCardImg = env->addStaticText(L"", irr::core::rect<irr::s32>(1, 1, 1 + CARD_IMG_WIDTH + 20, 1 + CARD_IMG_HEIGHT + 18), true, false, 0, -1, true);
-	wCardImg->setBackgroundColor(0xc0c0c0c0);
+	if(!gameConf.modern_ui)
+		wCardImg->setBackgroundColor(0xc0c0c0c0);
 	wCardImg->setVisible(false);
 	imgCard = env->addImage(irr::core::rect<irr::s32>(10, 9, 10 + CARD_IMG_WIDTH, 9 + CARD_IMG_HEIGHT), wCardImg);
 	showingcode = 0;
@@ -572,12 +573,14 @@ bool Game::Initialize() {
 	chkSwapYesNoButton->setChecked(gameConf.swap_yes_no_button);
 	posY += 30;
 	chkResizeSelectWindow = env->addCheckBox(gameConf.resize_select_window, irr::core::rect<irr::s32>(posX, posY, posX + chkBoxLabelWidth, posY + 25), tabSystem, CHECKBOX_RESIZE_SELECT_WINDOW, dataManager.GetSysString(1387));
-	posY += 30;
-	env->addStaticText(dataManager.GetSysString(1282), irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 110, posY + 28), false, false, tabSystem);
-	btnWinResizeS = env->addButton(irr::core::rect<irr::s32>(posX + 115, posY, posX + 145, posY + 25), tabSystem, BUTTON_WINDOW_RESIZE_S, dataManager.GetSysString(1283));
-	btnWinResizeM = env->addButton(irr::core::rect<irr::s32>(posX + 150, posY, posX + 180, posY + 25), tabSystem, BUTTON_WINDOW_RESIZE_M, dataManager.GetSysString(1284));
-	btnWinResizeL = env->addButton(irr::core::rect<irr::s32>(posX + 185, posY, posX + 215, posY + 25), tabSystem, BUTTON_WINDOW_RESIZE_L, dataManager.GetSysString(1285));
-	btnWinResizeXL = env->addButton(irr::core::rect<irr::s32>(posX + 220, posY, posX + 250, posY + 25), tabSystem, BUTTON_WINDOW_RESIZE_XL, dataManager.GetSysString(1286));
+	btnWinResizeS = env->addButton(irr::core::rect<irr::s32>(0, 0, 1, 1), tabSystem, BUTTON_WINDOW_RESIZE_S, dataManager.GetSysString(1283));
+	btnWinResizeM = env->addButton(irr::core::rect<irr::s32>(0, 0, 1, 1), tabSystem, BUTTON_WINDOW_RESIZE_M, dataManager.GetSysString(1284));
+	btnWinResizeL = env->addButton(irr::core::rect<irr::s32>(0, 0, 1, 1), tabSystem, BUTTON_WINDOW_RESIZE_L, dataManager.GetSysString(1285));
+	btnWinResizeXL = env->addButton(irr::core::rect<irr::s32>(0, 0, 1, 1), tabSystem, BUTTON_WINDOW_RESIZE_XL, dataManager.GetSysString(1286));
+	btnWinResizeS->setVisible(false);
+	btnWinResizeM->setVisible(false);
+	btnWinResizeL->setVisible(false);
+	btnWinResizeXL->setVisible(false);
 	posY += 30;
 	chkResizePopupMenu = env->addCheckBox(gameConf.resize_popup_menu > 0, irr::core::rect<irr::s32>(posX, posY, posX + 110, posY + 25), tabSystem, CHECKBOX_RESIZE_POPUP_MENU, dataManager.GetSysString(1386));
 	scrResizePopupMenu = env->addScrollBar(true, irr::core::rect<irr::s32>(posX + 115, posY + 4, posX + 250, posY + 21), tabSystem, SCROLL_RESIZE_POPUP_MENU);
@@ -1289,7 +1292,7 @@ void Game::MainLoop() {
 		if(now - targetTime > targetFrameDuration)
 			lastFrameTime = now;
 		if(now - lastFpsTime >= std::chrono::milliseconds(1000)) {
-			myswprintf(cap, L"KoishiPro FPS: %d", fps);
+			myswprintf(cap, L"YGOPro KoishiPro-HTmod FPS: %d", fps);
 			device->setWindowCaption(cap);
 			fps = 0;
 			lastFpsTime += std::chrono::milliseconds(1000);
@@ -2181,6 +2184,19 @@ void Game::LoadConfig() {
 #endif
 	}
 	LoadConfigFromFile("load-once.conf");
+	if(gameConf.resolution_preset == 0) {
+#ifdef _WIN32
+		int scrH = GetSystemMetrics(SM_CYSCREEN);
+		if(scrH >= 1440)
+			gameConf.resolution_preset = 1080;
+		else if(scrH >= 1080)
+			gameConf.resolution_preset = 900;
+		else
+			gameConf.resolution_preset = 720;
+#else
+		gameConf.resolution_preset = 720;
+#endif
+	}
 	switch(gameConf.resolution_preset) {
 		case 720:
 			gameConf.window_width = 1280;
