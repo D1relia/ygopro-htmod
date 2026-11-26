@@ -1,5 +1,8 @@
 #ifndef YGOPRO_CONFIG_H
 #define YGOPRO_CONFIG_H
+#ifndef YGOPRO_COMPAT_MYCARD
+#define YGOPRO_COMPAT_MYCARD
+#endif
 
 #include <cstdio>
 #include <string>
