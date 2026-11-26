@@ -204,7 +204,19 @@ bool Game::Initialize() {
 				break;
 		}
 	}
-	textFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, gameConf.textfontsize);
+	textFont = nullptr;
+	if(gameConf.modern_ui) {
+		textFont = irr::gui::CGUITTFont::createTTFont(env, "./fonts/MiSans-Medium.ttf", gameConf.textfontsize);
+		if(textFont) {
+			BufferIO::CopyString("./fonts/MiSans-Medium.ttf", gameConf.textfont);
+			BufferIO::CopyString("./fonts/MiSans-Medium.ttf", gameConf.numfont);
+			if(numFont)
+				numFont->drop();
+			numFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 16);
+		}
+	}
+	if(!textFont)
+		textFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, gameConf.textfontsize);
 	if(!textFont) {
 		const char* textFontPaths[] = {
 			"./fonts/textFont.ttf",
@@ -255,7 +267,7 @@ bool Game::Initialize() {
 		return false;
 	}
 	adFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 12);
-	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 48);
+	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, gameConf.modern_ui ? 28 : 48);
 	irr::u32 scaledGuiFontSize = static_cast<irr::u32>(gameConf.textfontsize * gameConf.window_height / 640.0f + 0.5f);
 	guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, scaledGuiFontSize);
 	smgr = device->getSceneManager();
@@ -1177,6 +1189,13 @@ void Game::MainLoop() {
 	LoadExpansionsAll();
 	wchar_t cap[256];
 	camera = smgr->addCameraSceneNode(0);
+	if(gameConf.modern_ui) {
+		float boardCenterX = (matManager.vFieldMzone[0][0][0].Pos.X + matManager.vFieldMzone[0][4][1].Pos.X) * 0.5f;
+		gameConf.cam_x = boardCenterX;
+		gameConf.cam_look_x = boardCenterX;
+		gameConf.proj_left = -0.96f;
+		gameConf.proj_right = 0.53f;
+	}
 	irr::core::matrix4 mProjection;
 	BuildProjectionMatrix(mProjection, gameConf.proj_left, gameConf.proj_right, gameConf.proj_bottom, gameConf.proj_top, 1.0f, 100.0f);
 	camera->setProjectionMatrix(mProjection);
@@ -2852,7 +2871,7 @@ void Game::OnResize() {
 	irr::gui::CGUITTFont* old_textFont = textFont;
 	numFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, (yScale > 0.5 ? 16 * yScale : 8));
 	adFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, (yScale > 0.75 ? 12 * yScale : 9));
-	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 48 * yScale);
+	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, (gameConf.modern_ui ? 28 : 48) * yScale);
 	textFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, (yScale > 0.642 ? gameConf.textfontsize * yScale : 9));
 	old_numFont->drop();
 	old_adFont->drop();
