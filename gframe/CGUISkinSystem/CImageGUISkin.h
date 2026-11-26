@@ -193,7 +193,8 @@ public:
 
 private:
     bool isHovered(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) const;
-    void drawSoftBox(const core::rect<s32>& rect, video::SColor fill, video::SColor border, const core::rect<s32>* clip, bool fillBg = true) const;
+	void drawRoundedBox(const core::rect<s32>& rect, s32 radius, video::SColor fill, video::SColor border, const core::rect<s32>* clip, bool fillBg = true) const;
+    void drawSoftShadow(const core::rect<s32>& rect, s32 radius, const core::rect<s32>* clip) const;
 
     IrrlichtDevice* Device;
     video::IVideoDriver* VideoDriver;
