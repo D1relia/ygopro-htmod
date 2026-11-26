@@ -2324,6 +2324,13 @@ void Game::ShowCardInfo(int code, bool resize) {
 		myswprintf(formatBuffer, L"%ls[%08d]", dataManager.GetName(code), code);
 	}
 	stName->setText(formatBuffer);
+	if(gameConf.modern_ui) {
+		stName->setOverrideColor(0xfff8fafc);
+		stInfo->setOverrideColor(0xff60a5fa);
+		stDataInfo->setOverrideColor(0xff93c5fd);
+		stSetName->setOverrideColor(0xff38bdf8);
+		stText->setOverrideColor(0xffe2e8f0);
+	}
 	if((int)guiFont->getDimension(formatBuffer).Width > stName->getRelativePosition().getWidth() - gameConf.textfontsize)
 		stName->setToolTipText(formatBuffer);
 	else
