@@ -1522,7 +1522,7 @@ void Game::DrawDeckBd() {
 
 	// ====== Layout computation ======
 	int   lx, rows;
-	float dx;
+	float dx, main_dy = dy;
 
 	if(deckBuilder.showing_pack) {
 		// Pack mode: fill the full 160-630 panel with as many rows/cols as possible
@@ -1545,15 +1545,17 @@ void Game::DrawDeckBd() {
 		deckBuilder.layout.pack_scroll     = scrPackCards->isVisible();
 		deckBuilder.layout.pack_scroll_pos = scrPackCards->getPos();
 	} else {
-		// Non-pack: main deck gets all space above extra/side sections
+		// Non-pack: fixed 10 cards per row, 41-60 cards expand downward
 		float main_h = main_panel_bot_np - panel_top;
-		rows = (int)((main_h - ch) / dy) + 1;
+		lx = 10;
+		rows = (mainsize + lx - 1) / lx;
 		if(rows < 4) rows = 4;
-		int lx_w = (int)((panel_w - cw) / dx_max) + 1;
-		if(lx_w < 10) lx_w = 10;
-		int min_lx = (mainsize + rows - 1) / (rows > 0 ? rows : 1);
-		lx = lx_w > min_lx ? lx_w : min_lx;
-		dx = (lx > 1) ? (panel_w - cw) / (lx - 1) : 0.0f;
+		if(rows > 1) {
+			float fit_dy = (main_h - ch - 4.0f * mul) / (rows - 1);
+			if(fit_dy < main_dy)
+				main_dy = fit_dy;
+		}
+		dx = (panel_w - cw) / (lx - 1);
 		deckBuilder.layout.pack_scroll     = false;
 		deckBuilder.layout.pack_scroll_pos = 0;
 	}
@@ -1563,7 +1565,7 @@ void Game::DrawDeckBd() {
 	deckBuilder.layout.mul      = mul;
 	deckBuilder.layout.cw       = cw;
 	deckBuilder.layout.ch       = ch;
-	deckBuilder.layout.dy       = dy;
+	deckBuilder.layout.dy       = main_dy;
 	deckBuilder.layout.dx       = dx;
 	deckBuilder.layout.lx       = lx;
 	deckBuilder.layout.rows     = rows;
@@ -1594,7 +1596,7 @@ void Game::DrawDeckBd() {
 			int col = i % lx;
 			int row = i / lx;
 			int sx  = (int)(panel_left + col * dx);
-			int sy  = (int)(panel_top  + row * dy);
+			int sy  = (int)(panel_top  + row * main_dy);
 			DrawThumb(deckManager.current_deck.main[j], irr::core::vector2di(sx, sy), mul, deckBuilder.filterList);
 			if(deckBuilder.hovered_pos == 1 && deckBuilder.hovered_seq == j)
 				driver->draw2DRectangleOutline(irr::core::recti(sx - 1, sy - 1, sx + (int)cw + 1, sy + (int)ch + 1));
