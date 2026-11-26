@@ -406,6 +406,20 @@ void ClientField::SetCardListLabel(irr::gui::IGUIStaticText* label, ClientCard* 
 		myswprintf(formatBuffer, L"%ls[%d]", dataManager.FormatLocation(pcard), pcard->sequence + 1);
 	label->setText(formatBuffer);
 	label->enableOverrideColor(false); // setOverrideColor will turn this on again automatically
+	if(mainGame->gameConf.modern_ui) {
+		label->setDrawBorder(false);
+		label->setOverrideColor(0xfff8fafc);
+		bool isOpp = (pcard->location == LOCATION_OVERLAY && pcard->overlayTarget) ? (pcard->overlayTarget->controler != 0) : (pcard->controler != 0);
+		if(selecting_card && select_continuous)
+			label->setBackgroundColor(0xe6232e42);
+		else if(selecting_card && pcard->is_selected)
+			label->setBackgroundColor(0xf20a84ff);
+		else if(isOpp)
+			label->setBackgroundColor(0xe65c2432);
+		else
+			label->setBackgroundColor(0xe6232e42);
+		return;
+	}
 	if(selecting_card && select_continuous) {
 		label->setBackgroundColor(CARD_LIST_DEFAULT_BACKGROUND_COLOR);
 		return;
@@ -834,10 +848,11 @@ case 0:
 		float hover_dy = 0.223f * cosf(hand_angle);
 		float hover_dz = 0.223f * sinf(hand_angle);
 		if (controler == 0) {
+			float handShiftX = (matManager.vFieldMzone[0][0][0].Pos.X + matManager.vFieldMzone[0][4][1].Pos.X) * 0.5f - 3.90f;
 			if (count <= 6)
-				t->X = (5.5f - 0.8f * count) / 2 + 1.55f + sequence * 0.8f;
+				t->X = (5.5f - 0.8f * count) / 2 + 1.55f + sequence * 0.8f + handShiftX;
 			else
-				t->X = 1.9f + sequence * 4.0f / (count - 1);
+				t->X = 1.9f + sequence * 4.0f / (count - 1) + handShiftX;
 			if (pcard->is_hovered) {
 				t->Y = 4.0f - hover_dy;
 				t->Z = 0.5f + hover_dz + 0.001f * sequence;
@@ -855,10 +870,11 @@ case 0:
 				r->Z = 0;
 			}
 		} else {
+			float handShiftX = (matManager.vFieldMzone[0][0][0].Pos.X + matManager.vFieldMzone[0][4][1].Pos.X) * 0.5f - 3.90f;
 			if (count <= 6)
-				t->X = 6.25f - (5.5f - 0.8f * count) / 2 - sequence * 0.8f;
+				t->X = 6.25f - (5.5f - 0.8f * count) / 2 - sequence * 0.8f + handShiftX;
 			else
-				t->X = 5.9f - sequence * 4.0f / (count - 1);
+				t->X = 5.9f - sequence * 4.0f / (count - 1) + handShiftX;
 			if (pcard->is_hovered) {
 				t->Y = -3.4f - hover_dy;
 				t->Z = 0.5f + hover_dz - 0.001f * sequence;
