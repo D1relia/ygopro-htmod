@@ -129,6 +129,18 @@ struct Config {
 	int chkEnablePScale{ 1 };
 	int skin_index { -1 };
 	int ask_mset{ 0 };
+	// custom mod: resolution & camera
+	int resolution_preset{ 720 };
+	float cam_x{ 4.2f };
+	float cam_y{ 9.2f };
+	float cam_z{ 5.8f };
+	float cam_look_x{ 4.2f };
+	float cam_look_y{ -0.4f };
+	float cam_look_z{ 0.0f };
+	float proj_left{ -0.97f };
+	float proj_right{ 0.52f };
+	float proj_bottom{ -0.42f };
+	float proj_top{ 0.42f };
 };
 
 struct DuelInfo {
