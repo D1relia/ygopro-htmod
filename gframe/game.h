@@ -504,7 +504,9 @@ public:
 	irr::gui::IGUIButton* btnWinResizeXL{};
 	irr::gui::IGUICheckBox* chkEnablePScale{};
 	irr::gui::IGUIComboBox* cbLocale{};
-	irr::gui::IGUIComboBox* cbSkin{};
+	irr::gui::IGUIComboBox* cbSkin;
+	irr::gui::IGUIComboBox* cbResolution;
+	void ApplyResolutionPreset(int preset);
 	//main menu
 	irr::gui::IGUIWindow* wMainMenu{};
 	irr::gui::IGUIButton* btnLanMode{};
@@ -1025,6 +1027,7 @@ extern Game* mainGame;
 #define BUTTON_SERVER_LIST			392
 #define LISTBOX_SERVER_LIST			393
 #define BUTTON_SERVER_RETURN		394
+#define COMBOBOX_RESOLUTION			395
 
 #define TEXTURE_DUEL				0
 #define TEXTURE_DECK				1
