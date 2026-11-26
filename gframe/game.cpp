@@ -242,10 +242,8 @@ bool Game::Initialize() {
 	lpcFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.numfont, 48);
 	guiFont = irr::gui::CGUITTFont::createTTFont(env, gameConf.textfont, gameConf.textfontsize);
 	smgr = device->getSceneManager();
-	device->setWindowCaption(L"KoishiPro");
-	device->setResizable(true);
-	if(gameConf.window_maximized)
-		device->maximizeWindow();
+	device->setWindowCaption(L"KoishiPro-htmod");
+	device->setResizable(false);
 #ifdef _WIN32
 	irr::video::SExposedVideoData exposedData = driver->getExposedVideoData();
 	if(gameConf.use_d3d)
@@ -1115,10 +1113,13 @@ void Game::MainLoop() {
 	wchar_t cap[256];
 	camera = smgr->addCameraSceneNode(0);
 	irr::core::matrix4 mProjection;
-	BuildProjectionMatrix(mProjection, -0.90f, 0.45f, -0.42f, 0.42f, 1.0f, 100.0f);
+	BuildProjectionMatrix(mProjection, gameConf.proj_left, gameConf.proj_right, gameConf.proj_bottom, gameConf.proj_top, 1.0f, 100.0f);
 	camera->setProjectionMatrix(mProjection);
 
-	mProjection.buildCameraLookAtMatrixLH(irr::core::vector3df(4.2f, 8.0f, 7.8f), irr::core::vector3df(4.2f, 0, 0), irr::core::vector3df(0, 0, 1));
+	mProjection.buildCameraLookAtMatrixLH(
+		irr::core::vector3df(gameConf.cam_x, gameConf.cam_y, gameConf.cam_z),
+		irr::core::vector3df(gameConf.cam_look_x, gameConf.cam_look_y, gameConf.cam_look_z),
+		irr::core::vector3df(0, 0, 1));
 	camera->setViewMatrixAffector(mProjection);
 	smgr->setAmbientLight(irr::video::SColorf(1.0f, 1.0f, 1.0f));
 	float atkframe = 0.1f;
@@ -2005,6 +2006,28 @@ bool Game::LoadConfigFromFile(const char* file) {
 			gameConf.chkEnablePScale = strtol(valbuf, nullptr, 10);
 		} else if (!std::strcmp(strbuf, "skin_index")) {
 			gameConf.skin_index = atoi(valbuf);
+		} else if (!std::strcmp(strbuf, "resolution_preset")) {
+			gameConf.resolution_preset = std::strtol(valbuf, nullptr, 10);
+		} else if (!std::strcmp(strbuf, "cam_x")) {
+			gameConf.cam_x = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "cam_y")) {
+			gameConf.cam_y = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "cam_z")) {
+			gameConf.cam_z = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "cam_look_x")) {
+			gameConf.cam_look_x = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "cam_look_y")) {
+			gameConf.cam_look_y = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "cam_look_z")) {
+			gameConf.cam_look_z = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "proj_left")) {
+			gameConf.proj_left = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "proj_right")) {
+			gameConf.proj_right = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "proj_bottom")) {
+			gameConf.proj_bottom = std::strtof(valbuf, nullptr);
+		} else if (!std::strcmp(strbuf, "proj_top")) {
+			gameConf.proj_top = std::strtof(valbuf, nullptr);
 		} else {
 			// options allowing multiple words
 			if (std::sscanf(linebuf, "%63s = %959[^\n]", strbuf, valbuf) != 2)
@@ -2102,6 +2125,30 @@ void Game::LoadConfig() {
 #endif
 	}
 	LoadConfigFromFile("load-once.conf");
+	switch(gameConf.resolution_preset) {
+		case 720:
+			gameConf.window_width = 1280;
+			gameConf.window_height = 720;
+			break;
+		case 900:
+			gameConf.window_width = 1600;
+			gameConf.window_height = 900;
+			break;
+		case 1080:
+			gameConf.window_width = 1920;
+			gameConf.window_height = 1080;
+			break;
+		case 1440:
+			gameConf.window_width = 2560;
+			gameConf.window_height = 1440;
+			break;
+		default:
+			gameConf.resolution_preset = 720;
+			gameConf.window_width = 1280;
+			gameConf.window_height = 720;
+			break;
+	}
+	gameConf.window_maximized = false;
 }
 void Game::SaveConfig() {
 	FileSystem::RemoveFile("load-once.conf");
