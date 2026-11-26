@@ -361,6 +361,16 @@ jobs:
         shell: pwsh
         run: |
           MSBuild.exe build\YGOPro.sln /m /p:Configuration=Release /p:Platform=x64
+      
+      - name: Build SC Translation Updater (PyInstaller)
+        shell: pwsh
+        run: |
+          if (Test-Path "installer\sc_updater.py") {
+            python -m pip install --upgrade pip pyinstaller requests
+            pyinstaller --onefile --console --distpath bin/installer --name SC_Updater installer/sc_updater.py
+          } else {
+            Write-Host "installer/sc_updater.py not found, skipping SC_Updater build."
+          }
 
       - name: Build Installer (Inno Setup)
         shell: pwsh
