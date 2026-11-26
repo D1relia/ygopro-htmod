@@ -99,6 +99,18 @@ void DuelInfo::Clear() {
 }
 
 bool Game::Initialize() {
+#ifdef _WIN32
+	{
+		HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+		if(hUser32) {
+			typedef BOOL(WINAPI* SetDpiCtxFn)(HANDLE);
+			auto setDpiCtx = reinterpret_cast<SetDpiCtxFn>(GetProcAddress(hUser32, "SetProcessDpiAwarenessContext"));
+			if(!setDpiCtx || !setDpiCtx(reinterpret_cast<HANDLE>(-4))) {
+				SetProcessDPIAware();
+			}
+		}
+	}
+#endif
 	initUtils();
 	LoadConfig();
 	irr::SIrrlichtCreationParameters params{};
@@ -250,6 +262,26 @@ bool Game::Initialize() {
 		hWnd = reinterpret_cast<HWND>(exposedData.D3D9.HWnd);
 	else
 		hWnd = reinterpret_cast<HWND>(exposedData.OpenGLWin32.HWnd);
+	{
+		int scrW = GetSystemMetrics(SM_CXSCREEN);
+		int scrH = GetSystemMetrics(SM_CYSCREEN);
+		if(gameConf.window_width >= scrW && gameConf.window_height >= scrH) {
+			SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+			SetWindowPos(hWnd, HWND_TOP, 0, 0, scrW, scrH, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+		} else {
+			RECT rc = { 0, 0, gameConf.window_width, gameConf.window_height };
+			DWORD style = static_cast<DWORD>(GetWindowLongPtr(hWnd, GWL_STYLE));
+			DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hWnd, GWL_EXSTYLE));
+			AdjustWindowRectEx(&rc, style, FALSE, exStyle);
+			int winW = rc.right - rc.left;
+			int winH = rc.bottom - rc.top;
+			int posX = (scrW - winW) / 2;
+			int posY = (scrH - winH) / 2;
+			if(posX < 0) posX = 0;
+			if(posY < 0) posY = 0;
+			SetWindowPos(hWnd, nullptr, posX, posY, winW, winH, SWP_NOZORDER | SWP_FRAMECHANGED);
+		}
+	}
 #endif
 	SetWindowsIcon();
 	//main menu
