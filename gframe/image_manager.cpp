@@ -96,12 +96,6 @@ irr::video::ITexture* ImageManager::GetRandomImage(int image_type, s32 width, s3
 	return GetTextureFromFile(ImageName, width, height);
 }
 void ImageManager::RefreshRandomImageList() {
-	RefreshImageDir(L"bg", TEXTURE_DUEL);
-	RefreshImageDir(L"bg_duel", TEXTURE_DUEL);
-	RefreshImageDir(L"bg_deck", TEXTURE_DECK);
-	RefreshImageDir(L"bg_menu", TEXTURE_MENU);
-	RefreshImageDir(L"cover", TEXTURE_COVER_S);
-	RefreshImageDir(L"cover2", TEXTURE_COVER_O);
 	RefreshImageDir(L"attack", TEXTURE_ATTACK);
 	RefreshImageDir(L"act", TEXTURE_ACTIVATE);
 
@@ -178,20 +172,14 @@ void ImageManager::ResizeTexture() {
 	float btnScale = 0.5f * (mainGame->gameConf.resize_select_window ? mainGame->yScale : 1.2f);
 	irr::s32 btnImgWidth = CARD_IMG_WIDTH * btnScale;
 	irr::s32 btnImgHeight = CARD_IMG_HEIGHT * btnScale;
-	const char* coverFiles[2] = { "textures/cover.jpg", "textures/cover2.jpg" };
+	const char* coverFiles[2] = { "textures/cover.jpg", "textures/cover.jpg" };
 	driver->removeTexture(tCover[0]);
 	if(tCover[1] != tCover[0])
 		driver->removeTexture(tCover[1]);
-	tCover[0] = GetRandomImage(TEXTURE_COVER_S, imgWidth, imgHeight);
+	tCover[0] = GetTextureFromFile("textures/cover.jpg", imgWidth, imgHeight);
 	if(!tCover[0])
-		tCover[0] = GetTextureFromFile("textures/cover.jpg", imgWidth, imgHeight);
-	tCover[1] = GetRandomImage(TEXTURE_COVER_O, imgWidth, imgHeight);
-	if(!tCover[1])
-		tCover[1] = GetTextureFromFile("textures/cover2.jpg", imgWidth, imgHeight);
-	if(!tCover[1])
-		tCover[1] = GetRandomImage(TEXTURE_COVER_S, imgWidth, imgHeight);
-	if(!tCover[1])
-		tCover[1] = tCover[0];
+		tCover[0] = GetTextureFromFile("textures/cover.png", imgWidth, imgHeight);
+	tCover[1] = tCover[0];
 	driver->removeTexture(tUnknown);
 	driver->removeTexture(tUnknownFit);
 	driver->removeTexture(tUnknownThumb);
@@ -213,25 +201,22 @@ void ImageManager::ResizeTexture() {
 		driver->removeTexture(tBackGround_menu);
 	if(tBackGround_deck != tBackGround)
 		driver->removeTexture(tBackGround_deck);
-	tBackGround = GetRandomImage(TEXTURE_DUEL, bgWidth, bgHeight);
-	if(!tBackGround)
-		tBackGround = GetTextureFromFile("textures/bg.jpg", bgWidth, bgHeight);
-	if(!tBackGround)
-		tBackGround = GetTextureFromFile("textures/bg_duel.jpg", bgWidth, bgHeight);
-	tBackGround_menu = GetRandomImage(TEXTURE_MENU, bgWidth, bgHeight);
-	if(!tBackGround_menu)
-		tBackGround_menu = GetTextureFromFile("textures/bg_menu.jpg", bgWidth, bgHeight);
-	if(!tBackGround_menu)
-		tBackGround_menu = GetRandomImage(TEXTURE_DUEL, bgWidth, bgHeight);
-	if(!tBackGround_menu)
+	{
+		irr::u32 w = bgWidth > 0 ? static_cast<irr::u32>(bgWidth) : 16;
+		irr::u32 h = bgHeight > 0 ? static_cast<irr::u32>(bgHeight) : 16;
+		irr::video::IImage* solidBg = driver->createImage(irr::video::ECF_A8R8G8B8, irr::core::dimension2d<irr::u32>(w, h));
+		if(solidBg) {
+			solidBg->fill(irr::video::SColor(255, 213, 221, 232));
+			char bgName[64];
+			mysnprintf(bgName, "textures/solid_bg/%u_%u", w, h);
+			tBackGround = driver->addTexture(bgName, solidBg);
+			solidBg->drop();
+		} else {
+			tBackGround = nullptr;
+		}
 		tBackGround_menu = tBackGround;
-	tBackGround_deck = GetRandomImage(TEXTURE_DECK, bgWidth, bgHeight);
-	if(!tBackGround_deck)
-		tBackGround_deck = GetTextureFromFile("textures/bg_deck.jpg", bgWidth, bgHeight);
-	if(!tBackGround_deck)
-		tBackGround_deck = GetRandomImage(TEXTURE_DUEL, bgWidth, bgHeight);
-	if(!tBackGround_deck)
 		tBackGround_deck = tBackGround;
+	}
 	driver->removeTexture(tButtonFacedown[0]);
 	if(tButtonFacedown[1] != tButtonFacedown[0])
 		driver->removeTexture(tButtonFacedown[1]);
