@@ -2319,7 +2319,6 @@ void Game::ShowCardInfo(int code, bool resize) {
 		stName->setToolTipText(formatBuffer);
 	else
 		stName->setToolTipText(nullptr);
-	int offset = 0;
 	irr::s32 fontH = static_cast<irr::s32>(guiFont->getDimension(L"A").Height);
 	irr::s32 lineH = std::max<irr::s32>(23, fontH + 6);
 	irr::s32 infoTop = stName->getRelativePosition().LowerRightCorner.Y + 6;
