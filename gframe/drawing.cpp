@@ -770,48 +770,271 @@ void Game::DrawMisc() {
 	if(btnLeaveGame->isVisible() && dField.tag_teammate_surrender)
 		DrawSelectionLine(btnLeaveGame, 2, 0xffffff00);
 	//lp bar
-	if((dInfo.turn % 2 && dInfo.isFirst && !dInfo.is_swapped) || (!(dInfo.turn % 2) && !dInfo.isFirst && !dInfo.is_swapped) || (!(dInfo.turn % 2) && dInfo.isFirst && dInfo.is_swapped) || (dInfo.turn % 2 && !dInfo.isFirst && dInfo.is_swapped)) {
-		driver->draw2DRectangle(0xa0000000, Resize(327, 8, 630, 51));
-		driver->draw2DRectangleOutline(Resize(327, 8, 630, 51), 0xffff8080);
+	bool isP0Turn = (dInfo.turn % 2 && dInfo.isFirst && !dInfo.is_swapped) || (!(dInfo.turn % 2) && !dInfo.isFirst && !dInfo.is_swapped) || (!(dInfo.turn % 2) && dInfo.isFirst && dInfo.is_swapped) || (dInfo.turn % 2 && !dInfo.isFirst && dInfo.is_swapped);
+	if(gameConf.modern_ui) {
+		auto DrawHudPill = [&](const irr::core::recti& rc, int rad, irr::video::SColor fill, irr::video::SColor border) {
+			int w = rc.getWidth(), h = rc.getHeight();
+			if(w <= 0 || h <= 0) return;
+			int r = std::min(rad, std::min(w / 2, h / 2));
+			bool hasB = (border.getAlpha() > 0);
+			bool hasF = (fill.getAlpha() > 0);
+			int x1 = rc.UpperLeftCorner.X, y1 = rc.UpperLeftCorner.Y;
+			int x2 = rc.LowerRightCorner.X, y2 = rc.LowerRightCorner.Y;
+			if(r <= 1) {
+				if(hasF) driver->draw2DRectangle(fill, rc);
+				if(hasB) driver->draw2DRectangleOutline(rc, border);
+				return;
+			}
+			float rf = (float)r, inRf = (float)(r - 1);
+			for(int i = 0; i < r; ++i) {
+				float dy = (rf - 0.5f) - (float)i;
+				int outX = (int)floorf(rf - sqrtf(std::max(0.0f, rf * rf - dy * dy)) + 0.5f);
+				int rt = y1 + i, rb = y2 - 1 - i;
+				if(!hasB) {
+					if(hasF && x1 + outX < x2 - outX) {
+						driver->draw2DRectangle(fill, irr::core::recti(x1 + outX, rt, x2 - outX, rt + 1));
+						if(rb != rt) driver->draw2DRectangle(fill, irr::core::recti(x1 + outX, rb, x2 - outX, rb + 1));
+					}
+				} else if(i == 0 || dy >= inRf) {
+					if(x1 + outX < x2 - outX) {
+						driver->draw2DRectangle(border, irr::core::recti(x1 + outX, rt, x2 - outX, rt + 1));
+						if(rb != rt) driver->draw2DRectangle(border, irr::core::recti(x1 + outX, rb, x2 - outX, rb + 1));
+					}
+				} else {
+					int inX = (int)floorf(rf - sqrtf(std::max(0.0f, inRf * inRf - dy * dy)) + 0.5f);
+					if(inX <= outX) inX = outX + 1;
+					driver->draw2DRectangle(border, irr::core::recti(x1 + outX, rt, x1 + inX, rt + 1));
+					driver->draw2DRectangle(border, irr::core::recti(x2 - inX, rt, x2 - outX, rt + 1));
+					if(rb != rt) {
+						driver->draw2DRectangle(border, irr::core::recti(x1 + outX, rb, x1 + inX, rb + 1));
+						driver->draw2DRectangle(border, irr::core::recti(x2 - inX, rb, x2 - outX, rb + 1));
+					}
+					if(hasF && x1 + inX < x2 - inX) {
+						driver->draw2DRectangle(fill, irr::core::recti(x1 + inX, rt, x2 - inX, rt + 1));
+						if(rb != rt) driver->draw2DRectangle(fill, irr::core::recti(x1 + inX, rb, x2 - inX, rb + 1));
+					}
+				}
+			}
+			if(y1 + r < y2 - r) {
+				int b = hasB ? 1 : 0;
+				if(hasF) driver->draw2DRectangle(fill, irr::core::recti(x1 + b, y1 + r, x2 - b, y2 - r));
+				if(hasB) {
+					driver->draw2DRectangle(border, irr::core::recti(x1, y1 + r, x1 + 1, y2 - r));
+					driver->draw2DRectangle(border, irr::core::recti(x2 - 1, y1 + r, x2, y2 - r));
+				}
+			}
+		};
+		auto DrawHudCard = [&](const irr::core::recti& rc, int rad, bool active, irr::video::SColor activeCol) {
+			for(int s = 3; s >= 1; --s) {
+				irr::core::recti sh(rc.UpperLeftCorner.X - s, rc.UpperLeftCorner.Y - s + 2, rc.LowerRightCorner.X + s, rc.LowerRightCorner.Y + s + 2);
+				DrawHudPill(sh, rad + s, irr::video::SColor(20 - s * 4, 15, 23, 42), irr::video::SColor(0, 0, 0, 0));
+			}
+			irr::video::SColor bg = active ? irr::video::SColor(242, 250, 252, 255) : irr::video::SColor(225, 248, 250, 252);
+			irr::video::SColor bd = active ? activeCol : irr::video::SColor(205, 203, 213, 225);
+			DrawHudPill(rc, rad, bg, bd);
+			if(active) {
+				irr::core::recti inner(rc.UpperLeftCorner.X + 1, rc.UpperLeftCorner.Y + 1, rc.LowerRightCorner.X - 1, rc.LowerRightCorner.Y - 1);
+				DrawHudPill(inner, std::max(1, rad - 1), irr::video::SColor(0, 0, 0, 0), irr::video::SColor(110, activeCol.getRed(), activeCol.getGreen(), activeCol.getBlue()));
+			}
+		};
+		auto FixHudColor = [](irr::video::SColor c) -> irr::video::SColor {
+			if(c.getRed() > 210 && c.getGreen() > 210 && c.getBlue() > 210)
+				return irr::video::SColor(255, 30, 41, 59);
+			if(c.getRed() > 210 && c.getGreen() > 200 && c.getBlue() < 80)
+				return irr::video::SColor(255, 217, 119, 6);
+			return c;
+		};
+
+		int cardRad = std::max(6, (int)(9 * yScale));
+		int barRad = std::max(3, (int)(4 * yScale));
+		irr::core::recti cardP0 = Resize(324, 6, 628, 56);
+		irr::core::recti cardP1 = Resize(692, 6, 996, 56);
+		irr::core::recti cardTurn = Resize(634, 6, 686, 56);
+		DrawHudCard(cardP0, cardRad, isP0Turn, irr::video::SColor(255, 0, 122, 255));
+		DrawHudCard(cardP1, cardRad, !isP0Turn, irr::video::SColor(255, 239, 68, 68));
+		DrawHudCard(cardTurn, cardRad, false, irr::video::SColor(205, 203, 213, 225));
+
+		// Sleek rounded LP progress bars
+		irr::core::recti trackP0 = Resize(334, 30, 618, 37);
+		irr::core::recti trackP1 = Resize(702, 30, 986, 37);
+		DrawHudPill(trackP0, barRad, irr::video::SColor(255, 226, 232, 240), irr::video::SColor(0, 0, 0, 0));
+		DrawHudPill(trackP1, barRad, irr::video::SColor(255, 226, 232, 240), irr::video::SColor(0, 0, 0, 0));
+		if(dInfo.start_lp > 0) {
+			auto maxLP = dInfo.isTag ? std::max(dInfo.start_lp / 2, 1) : dInfo.start_lp;
+			int maxW0 = trackP0.getWidth();
+			int maxW1 = trackP1.getWidth();
+			if(dInfo.lp[0] > 0) {
+				int w0 = (dInfo.lp[0] >= maxLP) ? maxW0 : (int)((long long)maxW0 * dInfo.lp[0] / maxLP);
+				if(w0 > 0) {
+					irr::video::SColor col0 = (dInfo.lp[0] > maxLP) ? irr::video::SColor(255, 16, 185, 129) : irr::video::SColor(255, 0, 122, 255);
+					DrawHudPill(irr::core::recti(trackP0.UpperLeftCorner.X, trackP0.UpperLeftCorner.Y, trackP0.UpperLeftCorner.X + w0, trackP0.LowerRightCorner.Y), barRad, col0, irr::video::SColor(0, 0, 0, 0));
+				}
+			}
+			if(dInfo.lp[1] > 0) {
+				int w1 = (dInfo.lp[1] >= maxLP) ? maxW1 : (int)((long long)maxW1 * dInfo.lp[1] / maxLP);
+				if(w1 > 0) {
+					irr::video::SColor col1 = (dInfo.lp[1] > maxLP) ? irr::video::SColor(255, 245, 158, 11) : irr::video::SColor(255, 239, 68, 68);
+					DrawHudPill(irr::core::recti(trackP1.LowerRightCorner.X - w1, trackP1.UpperLeftCorner.Y, trackP1.LowerRightCorner.X, trackP1.LowerRightCorner.Y), barRad, col1, irr::video::SColor(0, 0, 0, 0));
+				}
+			}
+		}
+
+		// Player names (top outer) & LP numbers (top inner)
+		if(!gameConf.hide_player_name) {
+			irr::core::recti p1size = Resize(335, 9, 540, 29);
+			irr::core::recti p2size = Resize(985, 9, 985, 29);
+			if(!dInfo.isTag || !dInfo.tag_player[0])
+				textFont->drawUstring(dInfo.hostname, p1size, 0xff0f172a, false, false, 0);
+			else
+				textFont->drawUstring(dInfo.hostname_tag, p1size, 0xff0f172a, false, false, 0);
+			if(!dInfo.isTag || !dInfo.tag_player[1]) {
+				auto cld = textFont->getDimension(dInfo.clientname);
+				p2size.UpperLeftCorner.X -= cld.Width;
+				textFont->drawUstring(dInfo.clientname, p2size, 0xff0f172a, false, false, 0);
+			} else {
+				auto cld = textFont->getDimension(dInfo.clientname_tag);
+				p2size.UpperLeftCorner.X -= cld.Width;
+				textFont->drawUstring(dInfo.clientname_tag, p2size, 0xff0f172a, false, false, 0);
+			}
+		}
+		DrawShadowText(numFont, dInfo.strLP[0], Resize(540, 8, 622, 28), Resize(0, 0, 0, 0), 0xff0066cc, 0x00000000, true, false, 0);
+		DrawShadowText(numFont, dInfo.strLP[1], Resize(698, 8, 780, 28), Resize(0, 0, 0, 0), 0xffdc2626, 0x00000000, true, false, 0);
+
+		// Bottom status row (time / cards / total ATK)
+		if(!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit) {
+			if(imageManager.tClock) {
+				driver->draw2DImage(imageManager.tClock, ResizeCardMid(574, 39, 590, 54, 590, 46), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+				driver->draw2DImage(imageManager.tClock, ResizeCardMid(702, 39, 718, 54, 718, 46), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+			}
+			DrawShadowText(numFont, dInfo.str_time_left[0], Resize(591, 38, 621, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[0]), 0x00000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_time_left[1], Resize(719, 38, 749, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.time_color[1]), 0x00000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(535, 39, 546, 54, 546, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(751, 39, 762, 54, 762, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+
+			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(546, 38, 571, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[0]), 0x00000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(762, 38, 787, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[1]), 0x00000000, true, false, 0);
+
+			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(482, 38, 532, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[0]), 0x00000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(798, 38, 848, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[1]), 0x00000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(473, 39, 482, 54, 482, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(789, 39, 798, 54, 798, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+		} else {
+			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(585, 39, 596, 54, 596, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(702, 39, 713, 54, 713, 46), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+
+			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(596, 38, 621, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[0]), 0x00000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(713, 38, 738, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.card_count_color[1]), 0x00000000, true, false, 0);
+
+			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(532, 38, 582, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[0]), 0x00000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(749, 38, 799, 55), Resize(0, 0, 0, 0), FixHudColor(dInfo.total_attack_color[1]), 0x00000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(523, 39, 532, 54, 532, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(740, 39, 749, 54, 749, 46), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+		}
+
+		// Clean Turn Badge
+		DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(634, 8, 686, 54), Resize(0, 0, 0, 0), isP0Turn ? 0xff007aff : 0xffef4444, 0x00000000, true, true, 0);
 	} else {
-		driver->draw2DRectangle(0xa0000000, Resize(689, 8, 992, 51));
-		driver->draw2DRectangleOutline(Resize(689, 8, 992, 51), 0xffff8080);
-	}
-	if(dInfo.start_lp > 0) {
-		constexpr float maxBarWidth = 292.0f;
-		auto maxLP = dInfo.isTag ? std::max(dInfo.start_lp / 2, 1) : dInfo.start_lp;
-		if(dInfo.lp[0] > maxLP) {
-			auto layerCount = dInfo.lp[0] / maxLP;
-			auto partialLP = dInfo.lp[0] % maxLP;
-			auto bgColorPos = (layerCount - 1) % 5;
-			auto fgColorPos = layerCount % 5; 
-			int barWidth = maxBarWidth * partialLP / maxLP;
-			driver->draw2DImage(imageManager.tLPBar, Resize(333 + barWidth, 12, 625, 28), irr::core::recti(0, bgColorPos * 16, 16, (bgColorPos + 1) * 16), 0, 0, true);
-			if(partialLP > 0) {
-				driver->draw2DImage(imageManager.tLPBar, Resize(333, 12, 333 + barWidth, 28), irr::core::recti(0, fgColorPos * 16, 16, (fgColorPos + 1) * 16), 0, 0, true);
-			}
+		if(isP0Turn) {
+			driver->draw2DRectangle(0xa0000000, Resize(327, 8, 630, 51));
+			driver->draw2DRectangleOutline(Resize(327, 8, 630, 51), 0xffff8080);
 		} else {
-			int barWidth = maxBarWidth * dInfo.lp[0] / maxLP;
-			driver->draw2DImage(imageManager.tLPBar, Resize(333, 12, 333 + barWidth, 28), irr::core::recti(0, 0, 16, 16), 0, 0, true);
+			driver->draw2DRectangle(0xa0000000, Resize(689, 8, 992, 51));
+			driver->draw2DRectangleOutline(Resize(689, 8, 992, 51), 0xffff8080);
 		}
-		if(dInfo.lp[1] > maxLP) {
-			auto layerCount = dInfo.lp[1] / maxLP;
-			auto partialLP = dInfo.lp[1] % maxLP;
-			auto bgColorPos = (layerCount - 1) % 5;
-			auto fgColorPos = layerCount % 5;
-			int barWidth = maxBarWidth * partialLP / maxLP;
-			driver->draw2DImage(imageManager.tLPBar, Resize(695, 12, 987 - barWidth, 28), irr::core::recti(0, bgColorPos * 16, 16, (bgColorPos + 1) * 16), 0, 0, true);
-			if(partialLP > 0) {
-				driver->draw2DImage(imageManager.tLPBar, Resize(987 - barWidth, 12, 987, 28), irr::core::recti(0, fgColorPos * 16, 16, (fgColorPos + 1) * 16), 0, 0, true);
+		if(dInfo.start_lp > 0) {
+			constexpr float maxBarWidth = 292.0f;
+			auto maxLP = dInfo.isTag ? std::max(dInfo.start_lp / 2, 1) : dInfo.start_lp;
+			if(dInfo.lp[0] > maxLP) {
+				auto layerCount = dInfo.lp[0] / maxLP;
+				auto partialLP = dInfo.lp[0] % maxLP;
+				auto bgColorPos = (layerCount - 1) % 5;
+				auto fgColorPos = layerCount % 5;
+				int barWidth = maxBarWidth * partialLP / maxLP;
+				driver->draw2DImage(imageManager.tLPBar, Resize(333 + barWidth, 12, 625, 28), irr::core::recti(0, bgColorPos * 16, 16, (bgColorPos + 1) * 16), 0, 0, true);
+				if(partialLP > 0) {
+					driver->draw2DImage(imageManager.tLPBar, Resize(333, 12, 333 + barWidth, 28), irr::core::recti(0, fgColorPos * 16, 16, (fgColorPos + 1) * 16), 0, 0, true);
+				}
+			} else {
+				int barWidth = maxBarWidth * dInfo.lp[0] / maxLP;
+				driver->draw2DImage(imageManager.tLPBar, Resize(333, 12, 333 + barWidth, 28), irr::core::recti(0, 0, 16, 16), 0, 0, true);
 			}
-		} else {
-			int barWidth = maxBarWidth * dInfo.lp[1] / maxLP;
-			driver->draw2DImage(imageManager.tLPBar, Resize(987 - barWidth, 12, 987, 28), irr::core::recti(0, 0, 16, 16), 0, 0, true);
+			if(dInfo.lp[1] > maxLP) {
+				auto layerCount = dInfo.lp[1] / maxLP;
+				auto partialLP = dInfo.lp[1] % maxLP;
+				auto bgColorPos = (layerCount - 1) % 5;
+				auto fgColorPos = layerCount % 5;
+				int barWidth = maxBarWidth * partialLP / maxLP;
+				driver->draw2DImage(imageManager.tLPBar, Resize(695, 12, 987 - barWidth, 28), irr::core::recti(0, bgColorPos * 16, 16, (bgColorPos + 1) * 16), 0, 0, true);
+				if(partialLP > 0) {
+					driver->draw2DImage(imageManager.tLPBar, Resize(987 - barWidth, 12, 987, 28), irr::core::recti(0, fgColorPos * 16, 16, (fgColorPos + 1) * 16), 0, 0, true);
+				}
+			} else {
+				int barWidth = maxBarWidth * dInfo.lp[1] / maxLP;
+				driver->draw2DImage(imageManager.tLPBar, Resize(987 - barWidth, 12, 987, 28), irr::core::recti(0, 0, 16, 16), 0, 0, true);
+			}
 		}
+		auto tLPFrameRect = irr::core::recti(0, 0, imageManager.tLPFrame->getOriginalSize().Width, imageManager.tLPFrame->getOriginalSize().Height);
+		driver->draw2DImage(imageManager.tLPFrame, Resize(329, 10, 629, 30), tLPFrameRect, 0, 0, true);
+		driver->draw2DImage(imageManager.tLPFrame, Resize(691, 10, 991, 30), tLPFrameRect, 0, 0, true);
+		if(!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit) {
+			if(imageManager.tClock) {
+				driver->draw2DImage(imageManager.tClock, ResizeCardMid(577, 32, 595, 50, 595, 41), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+				driver->draw2DImage(imageManager.tClock, ResizeCardMid(695, 32, 713, 50, 713, 41), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+			}
+			DrawShadowText(numFont, dInfo.str_time_left[0], Resize(595, 31, 625, 50), Resize(0, 1, 2, 0), dInfo.time_color[0], 0xff000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_time_left[1], Resize(713, 31, 743, 50), Resize(0, 1, 2, 0), dInfo.time_color[1], 0xff000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(538, 32, 550, 50, 550, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(745, 32, 757, 50, 757, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+
+			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(550, 31, 575, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[0], 0xff000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(757, 31, 782, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[1], 0xff000000, true, false, 0);
+
+			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(486, 31, 536, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[0], 0xff000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(793, 31, 843, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[1], 0xff000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(477, 32, 486, 50, 486, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(784, 32, 793, 50, 793, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+		} else {
+			driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(588, 32, 600, 50, 600, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+			driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(695, 32, 707, 50, 707, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
+
+			DrawShadowText(numFont, dInfo.str_card_count[0], Resize(600, 31, 625, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[0], 0xff000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_card_count[1], Resize(707, 31, 732, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[1], 0xff000000, true, false, 0);
+
+			DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(536, 31, 586, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[0], 0xff000000, true, false, 0);
+			DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(743, 31, 793, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[1], 0xff000000, true, false, 0);
+
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(527, 32, 536, 50, 536, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+			driver->draw2DImage(imageManager.tAttack, ResizeCardMid(734, 32, 743, 50, 743, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
+		}
+		DrawShadowText(numFont, dInfo.strLP[0], Resize(330, 12, 631, 30), Resize(0, 1, 2, 0), 0xffffff00, 0xff000000, true, false, 0);
+		DrawShadowText(numFont, dInfo.strLP[1], Resize(691, 12, 992, 30), Resize(0, 1, 2, 0), 0xffffff00, 0xff000000, true, false, 0);
+
+		if(!gameConf.hide_player_name) {
+			irr::core::recti p1size = Resize(334, 31, 624, 50);
+			irr::core::recti p2size = Resize(986, 31, 986, 50);
+			if(!dInfo.isTag || !dInfo.tag_player[0])
+				textFont->drawUstring(dInfo.hostname, p1size, 0xffffffff, false, false, 0);
+			else
+				textFont->drawUstring(dInfo.hostname_tag, p1size, 0xffffffff, false, false, 0);
+			if(!dInfo.isTag || !dInfo.tag_player[1]) {
+				auto cld = textFont->getDimension(dInfo.clientname);
+				p2size.UpperLeftCorner.X -= cld.Width;
+				textFont->drawUstring(dInfo.clientname, p2size, 0xffffffff, false, false, 0);
+			} else {
+				auto cld = textFont->getDimension(dInfo.clientname_tag);
+				p2size.UpperLeftCorner.X -= cld.Width;
+				textFont->drawUstring(dInfo.clientname_tag, p2size, 0xffffffff, false, false, 0);
+			}
+		}
+		driver->draw2DRectangle(Resize(632, 10, 688, 30), 0x00000000, 0x00000000, 0xffffffff, 0xffffffff);
+		driver->draw2DRectangle(Resize(632, 30, 688, 50), 0xffffffff, 0xffffffff, 0x00000000, 0x00000000);
+		DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(635, 5, 687, 40), Resize(0, 0, 2, 0), 0x8000ffff, 0x80000000, true, false, 0);
 	}
-	auto tLPFrameRect = irr::core::recti(0, 0, imageManager.tLPFrame->getOriginalSize().Width, imageManager.tLPFrame->getOriginalSize().Height);
-	driver->draw2DImage(imageManager.tLPFrame, Resize(329, 10, 629, 30), tLPFrameRect, 0, 0, true);
-	driver->draw2DImage(imageManager.tLPFrame, Resize(691, 10, 991, 30), tLPFrameRect, 0, 0, true);
 	if(lpframe) {
 		dInfo.lp[lpplayer] -= lpd;
 		myswprintf(dInfo.strLP[lpplayer], L"%d", dInfo.lp[lpplayer]);
@@ -825,69 +1048,6 @@ void Game::DrawMisc() {
 			DrawShadowText(lpcFont, lpcstring, Resize(400, 162, 922, 210), Resize(0, 2, 2, 0), lpccolor, lpccolor | 0x00ffffff, true, false, 0);
 		}
 	}
-	if(!dInfo.isReplay && dInfo.player_type < 7 && dInfo.time_limit) {
-		if(imageManager.tClock) {
-			driver->draw2DImage(imageManager.tClock, ResizeCardMid(577, 32, 595, 50, 595, 41), irr::core::recti(0, 0, 128, 128), 0, 0, true);
-			driver->draw2DImage(imageManager.tClock, ResizeCardMid(695, 32, 713, 50, 713, 41), irr::core::recti(0, 0, 128, 128), 0, 0, true);
-		}
-		DrawShadowText(numFont, dInfo.str_time_left[0], Resize(595, 31, 625, 50), Resize(0, 1, 2, 0), dInfo.time_color[0], 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.str_time_left[1], Resize(713, 31, 743, 50), Resize(0, 1, 2, 0), dInfo.time_color[1], 0xff000000, true, false, 0);
-
-		driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(538, 32, 550, 50, 550, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-		driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(745, 32, 757, 50, 757, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-
-		DrawShadowText(numFont, dInfo.str_card_count[0], Resize(550, 31, 575, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[0], 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.str_card_count[1], Resize(757, 31, 782, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[1], 0xff000000, true, false, 0);
-
-		DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(486, 31, 536, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[0], 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(793, 31, 843, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[1], 0xff000000, true, false, 0);
-
-		driver->draw2DImage(imageManager.tAttack, ResizeCardMid(477, 32, 486, 50, 486, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-		driver->draw2DImage(imageManager.tAttack, ResizeCardMid(784, 32, 793, 50, 793, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-
-/*
-		driver->draw2DRectangle(Resize(525, 34, 525 + dInfo.time_left[0] * 100 / dInfo.time_limit, 44), 0xa0e0e0e0, 0xa0e0e0e0, 0xa0c0c0c0, 0xa0c0c0c0);
-		driver->draw2DRectangleOutline(Resize(525, 34, 625, 44), 0xffffffff);
-		driver->draw2DRectangle(Resize(795 - dInfo.time_left[1] * 100 / dInfo.time_limit, 34, 795, 44), 0xa0e0e0e0, 0xa0e0e0e0, 0xa0c0c0c0, 0xa0c0c0c0);
-		driver->draw2DRectangleOutline(Resize(695, 34, 795, 44), 0xffffffff);
-*/
-	}
-	else {
-		driver->draw2DImage(imageManager.tCover[0], ResizeCardMid(588, 32, 600, 50, 600, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-		driver->draw2DImage(imageManager.tCover[1], ResizeCardMid(695, 32, 707, 50, 707, 41), Resize(0, 0, CARD_IMG_WIDTH, CARD_IMG_HEIGHT), 0, 0, true);
-
-		DrawShadowText(numFont, dInfo.str_card_count[0], Resize(600, 31, 625, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[0], 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.str_card_count[1], Resize(707, 31, 732, 50), Resize(0, 1, 2, 0), dInfo.card_count_color[1], 0xff000000, true, false, 0);
-
-		DrawShadowText(numFont, dInfo.str_total_attack[0], Resize(536, 31, 586, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[0], 0xff000000, true, false, 0);
-		DrawShadowText(numFont, dInfo.str_total_attack[1], Resize(743, 31, 793, 50), Resize(0, 1, 2, 0), dInfo.total_attack_color[1], 0xff000000, true, false, 0);
-
-		driver->draw2DImage(imageManager.tAttack, ResizeCardMid(527, 32, 536, 50, 536, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-		driver->draw2DImage(imageManager.tAttack, ResizeCardMid(734, 32, 743, 50, 743, 41), irr::core::recti(32, 0, 96, 128), 0, 0, true);
-	}
-	DrawShadowText(numFont, dInfo.strLP[0], Resize(330, 12, 631, 30), Resize(0, 1, 2, 0), 0xffffff00, 0xff000000, true, false, 0);
-	DrawShadowText(numFont, dInfo.strLP[1], Resize(691, 12, 992, 30), Resize(0, 1, 2, 0), 0xffffff00, 0xff000000, true, false, 0);
-
-	if(!gameConf.hide_player_name) {
-		irr::core::recti p1size = Resize(334, 31, 624, 50);
-		irr::core::recti p2size = Resize(986, 31, 986, 50);
-		if(!dInfo.isTag || !dInfo.tag_player[0])
-			textFont->drawUstring(dInfo.hostname, p1size, 0xffffffff, false, false, 0);
-		else
-			textFont->drawUstring(dInfo.hostname_tag, p1size, 0xffffffff, false, false, 0);
-		if(!dInfo.isTag || !dInfo.tag_player[1]) {
-			auto cld = textFont->getDimension(dInfo.clientname);
-			p2size.UpperLeftCorner.X -= cld.Width;
-			textFont->drawUstring(dInfo.clientname, p2size, 0xffffffff, false, false, 0);
-		} else {
-			auto cld = textFont->getDimension(dInfo.clientname_tag);
-			p2size.UpperLeftCorner.X -= cld.Width;
-			textFont->drawUstring(dInfo.clientname_tag, p2size, 0xffffffff, false, false, 0);
-		}
-	}
-	driver->draw2DRectangle(Resize(632, 10, 688, 30), 0x00000000, 0x00000000, 0xffffffff, 0xffffffff);
-	driver->draw2DRectangle(Resize(632, 30, 688, 50), 0xffffffff, 0xffffffff, 0x00000000, 0x00000000);
-	DrawShadowText(lpcFont, dataManager.GetNumString(dInfo.turn), Resize(635, 5, 687, 40), Resize(0, 0, 2, 0), 0x8000ffff, 0x80000000, true, false, 0);
 	auto ProjectToVirtual = [&](const irr::core::vector3df& pos) -> irr::core::vector2di {
 		irr::core::matrix4 trans = driver->getTransform(irr::video::ETS_PROJECTION);
 		trans *= driver->getTransform(irr::video::ETS_VIEW);
