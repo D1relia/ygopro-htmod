@@ -617,14 +617,14 @@ bool Game::Initialize() {
 	chkMusicMode = env->addCheckBox(false, irr::core::rect<irr::s32>(posX, posY, posX + chkBoxLabelWidth, posY + 25), tabSystem, -1, dataManager.GetSysString(1281));
 	chkMusicMode->setChecked(gameConf.music_mode != 0);
 	posY += 30;
-	chkEnablePScale = env->addCheckBox(false, irr::core::rect<irr::s32>(posX, posY, posX + chkBoxLabelWidth, posY + 25), tabSystem, -1, dataManager.GetSysString(1269));
+	chkEnablePScale = env->addCheckBox(false, irr::core::rect<irr::s32>(posX, posY, posX + chkBoxLabelWidth, posY + 25), tabSystem, -1, L"显示灵摆刻度");
 	chkEnablePScale->setChecked(gameConf.chkEnablePScale != 0);
 	posY += 30;
-	env->addStaticText(dataManager.GetSysString(1267), irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
+	env->addStaticText(L"语言", irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
 	cbLocale = env->addComboBox(irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, COMBOBOX_LOCALE);
 	RefreshLocales();
 	posY += 30;
-	env->addStaticText(dataManager.GetSysString(1490), irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
+	env->addStaticText(L"皮肤", irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
 	cbSkin = env->addComboBox(irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, COMBOBOX_SKIN);
 	cbSkin->setMaxSelectionRows(8);
 	RefreshSkins();
