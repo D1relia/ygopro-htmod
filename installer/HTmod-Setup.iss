@@ -57,7 +57,7 @@ Name: "sc"; Description: "简中官方译名更新器（更新简中官方译名
 #ifexist "..\bin\installer\Pics_Updater.exe"
 Name: "pics"; Description: "高清卡图替换工具（更新卡图.exe）"; Types: full
 Name: "pics\jp"; Description: "日文卡图 (OCG)"; Types: full; Flags: exclusive
-Name: "pics\sc"; Description: "简中官方卡图 (SC，未出简中卡自动回退原图)"; Flags: exclusive
+Name: "pics\sc"; Description: "简中卡图 (官方简中优先，最新卡包/先行卡自动补齐高清中文图)"; Flags: exclusive
 #endif
 
 [Files]
