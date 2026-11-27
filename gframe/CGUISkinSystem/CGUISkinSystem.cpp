@@ -363,14 +363,18 @@ u32 CModernLightSkin::getIcon(EGUI_DEFAULT_ICON icon) const { return FallbackSki
 void CModernLightSkin::setIcon(EGUI_DEFAULT_ICON icon, u32 index) { FallbackSkin->setIcon(icon, index); }
 
 bool CModernLightSkin::isHovered(IGUIElement* element, const core::rect<s32>& rect, const core::rect<s32>* clip) const {
-	if(!element || !element->isEnabled() || !Device || !Device->getCursorControl())
+	if(!element || !element->isEnabled() || !Device)
 		return false;
-	core::position2di mp = Device->getCursorControl()->getPosition();
-	if(!rect.isPointInside(mp))
+	IGUIEnvironment* env = Device->getGUIEnvironment();
+	if(!env)
 		return false;
-	if(clip && !clip->isPointInside(mp))
+	IGUIElement* hovered = env->getHovered();
+	if(!hovered)
 		return false;
-	return true;
+	// 标签栏的多个页签共用同一个 IGUITabControl 指针，跳过以免同时全部点亮
+	if(element->getType() == EGUIET_TAB_CONTROL)
+		return false;
+	return hovered == element;
 }
 
 void CModernLightSkin::drawRoundedBox(const core::rect<s32>& rect, s32 radius, video::SColor fill, video::SColor border, const core::rect<s32>* clip, bool fillBg) const {
