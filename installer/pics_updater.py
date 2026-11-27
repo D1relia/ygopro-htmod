@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import argparse
 import concurrent.futures
 import glob
 import io
+import json
 import os
 import re
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import zipfile
@@ -14,22 +18,28 @@ import requests
 from PIL import Image
 
 # ==================== 可按需调整的参数 ====================
+CDN_BASE = "https://cdn.233.momobako.com/ygoimg"
+
 LANG_CONFIG = {
     "jp": {
         "name": "日文卡图 (OCG)",
-        "url": "https://cdn.233.momobako.com/ygoimg/jp/{cid}.webp",
+        "sources": ["jp"],
         "ypk": "jp_pics.ypk",
         "cache": "_jp_pics_cache",
+        "state": "_jp_pics_state.json",
     },
     "sc": {
-        "name": "简中官方卡图 (SC)",
-        "url": "https://cdn.233.momobako.com/ygoimg/sc/{cid}.webp",
+        "name": "简中卡图 (SC 官图优先 + 最新中文高清兜底)",
+        "sources": ["sc", "ygopro"],
         "ypk": "sc_pics.ypk",
         "cache": "_sc_pics_cache",
+        "state": "_sc_pics_state.json",
     },
 }
-MAX_WORKERS = 6          # 并发线程数（建议不超过 8）
+
+MAX_WORKERS = 6          # 并发线程数（不建议超过 8）
 TIMEOUT = 12             # 单张下载超时（秒）
+META_TIMEOUT = 20        # metadata 索引拉取超时（秒）
 RETRY_TIMES = 3          # 失败重试次数
 MAX_WIDTH = 400          # 输出 JPG 最大宽度（0 为保留原尺寸）
 JPG_QUALITY = 85         # JPG 压缩质量
@@ -42,9 +52,12 @@ else:
 
 EXPANSIONS_DIR = os.path.join(BASE_DIR, "expansions")
 LOOSE_PICS_DIR = os.path.join(EXPANSIONS_DIR, "pics")
+OVERRIDE_MANIFEST_PATH = os.path.join(EXPANSIONS_DIR, "_htmod_override_manifest.json")
+OWN_YPK_NAMES = {cfg["ypk"].lower() for cfg in LANG_CONFIG.values()}
 
 _thread_local = threading.local()
 _RESAMPLE_LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
+_YPK_PIC_RE = re.compile(r"(?:^|/)pics/(\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
 
 
 def get_session() -> requests.Session:
@@ -56,6 +69,23 @@ def get_session() -> requests.Session:
         })
         _thread_local.session = s
     return _thread_local.session
+
+
+def read_ids_from_cdb_file(cdb_path: str) -> set[int]:
+    ids: set[int] = set()
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{cdb_path}?mode=ro", uri=True)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM datas WHERE id > 0")
+        for (cid,) in cur.fetchall():
+            ids.add(int(cid))
+    except sqlite3.Error:
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+    return ids
 
 
 def collect_ids_from_decks() -> set[int]:
@@ -78,7 +108,7 @@ def collect_ids_from_decks() -> set[int]:
     return ids
 
 
-def collect_ids_from_cdbs() -> set[int]:
+def collect_ids_from_local_cdbs() -> set[int]:
     cdb_paths = []
     main_cdb = os.path.join(BASE_DIR, "cards.cdb")
     if os.path.isfile(main_cdb):
@@ -88,16 +118,112 @@ def collect_ids_from_cdbs() -> set[int]:
 
     ids: set[int] = set()
     for path in cdb_paths:
-        try:
-            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-            cur = conn.cursor()
-            cur.execute("SELECT id FROM datas WHERE id > 0")
-            for (cid,) in cur.fetchall():
-                ids.add(int(cid))
-            conn.close()
-        except sqlite3.Error:
-            pass
+        ids |= read_ids_from_cdb_file(path)
     return ids
+
+
+def scan_external_ypks() -> tuple[set[int], set[int]]:
+    """
+    扫描 expansions/ 下除自身卡图包之外的 .ypk / .zip（例如超先行服补丁）：
+    返回 (外部补丁 cdb 中的卡密集合, 外部补丁自带 pics/ 的卡密集合)
+    """
+    cdb_ids: set[int] = set()
+    pic_ids: set[int] = set()
+    if not os.path.isdir(EXPANSIONS_DIR):
+        return cdb_ids, pic_ids
+
+    patterns = [
+        os.path.join(EXPANSIONS_DIR, "*.ypk"),
+        os.path.join(EXPANSIONS_DIR, "*.zip"),
+    ]
+    archive_paths: list[str] = []
+    for pat in patterns:
+        archive_paths.extend(glob.glob(pat))
+
+    for arch_path in sorted(set(archive_paths)):
+        fname = os.path.basename(arch_path).lower()
+        if fname in OWN_YPK_NAMES:
+            continue
+        try:
+            with zipfile.ZipFile(arch_path, "r") as zf:
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
+                    inner_name = info.filename
+                    m = _YPK_PIC_RE.search(inner_name)
+                    if m:
+                        cid = int(m.group(1))
+                        if cid > 0:
+                            pic_ids.add(cid)
+                    elif inner_name.lower().endswith(".cdb"):
+                        tmp_path = None
+                        try:
+                            data = zf.read(info.filename)
+                            with tempfile.NamedTemporaryFile(suffix=".cdb", delete=False) as tf:
+                                tf.write(data)
+                                tmp_path = tf.name
+                            cdb_ids |= read_ids_from_cdb_file(tmp_path)
+                        except (OSError, zipfile.BadZipFile):
+                            pass
+                        finally:
+                            if tmp_path and os.path.exists(tmp_path):
+                                try:
+                                    os.remove(tmp_path)
+                                except OSError:
+                                    pass
+        except (zipfile.BadZipFile, OSError):
+            pass
+
+    return cdb_ids, pic_ids
+
+
+def fetch_metadata(subdir: str) -> dict[int, str] | None:
+    """拉取百鸽指定目录的 metadata，返回 {卡密: 签名(md5)}；失败返回 None"""
+    url = f"{CDN_BASE}/{subdir}/metadata"
+    session = get_session()
+    for attempt in range(RETRY_TIMES):
+        try:
+            resp = session.get(url, timeout=META_TIMEOUT)
+            resp.raise_for_status()
+            meta: dict[int, str] = {}
+            for raw_line in resp.text.splitlines():
+                line = raw_line.strip()
+                if not line or ":" not in line:
+                    continue
+                fname, rest = line.split(":", 1)
+                fname = fname.strip().lower()
+                if not fname.endswith(".webp"):
+                    continue
+                stem = fname[:-5]
+                if not stem.isdigit():
+                    continue
+                parts = [p.strip() for p in rest.split(",")]
+                sig = parts[2] if len(parts) >= 3 and parts[2] else rest.strip()
+                meta[int(stem)] = sig
+            if meta:
+                return meta
+        except Exception:
+            if attempt < RETRY_TIMES - 1:
+                time.sleep(0.6 * (attempt + 1))
+    return None
+
+
+def load_json(path: str) -> dict:
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_json(path: str, data: dict) -> None:
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp_path, path)
 
 
 def switch_active_ypk(lang: str) -> str:
@@ -150,78 +276,175 @@ def get_existing_ids_in_dir(folder: str) -> set[int]:
     return existing
 
 
-def download_and_convert(cid: int, out_dir: str, cdn_url: str) -> str:
-    """返回值: 'ok' | '404' | 'err'"""
+def download_and_convert(
+    cid: int,
+    subdirs: list[str],
+    expected_sig: str | None,
+    out_dir: str,
+) -> tuple[str, int, str | None]:
+    """
+    下载并转码为 JPG，按 subdirs 顺序尝试（metadata 命中时 subdirs 仅含 1 项）。
+    返回值: ('ok' | '404' | 'err', cid, sig)
+    """
     out_path = os.path.join(out_dir, f"{cid}.jpg")
-    if os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
-        return "ok"
-
     session = get_session()
-    url = cdn_url.format(cid=cid)
+    saw_error = False
 
-    for attempt in range(RETRY_TIMES):
-        try:
-            resp = session.get(url, timeout=TIMEOUT)
-            if resp.status_code == 404:
-                return "404"
-            if resp.status_code == 429 or resp.status_code >= 500:
-                time.sleep(0.8 * (attempt + 1))
-                continue
-            resp.raise_for_status()
+    for subdir in subdirs:
+        url = f"{CDN_BASE}/{subdir}/{cid}.webp"
+        for attempt in range(RETRY_TIMES):
+            try:
+                resp = session.get(url, timeout=TIMEOUT)
+                if resp.status_code == 404:
+                    break
+                if resp.status_code == 429 or resp.status_code >= 500:
+                    saw_error = True
+                    time.sleep(0.8 * (attempt + 1))
+                    continue
+                resp.raise_for_status()
 
-            with Image.open(io.BytesIO(resp.content)) as img:
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                if MAX_WIDTH > 0 and img.width > MAX_WIDTH:
-                    new_h = max(1, int(img.height * (MAX_WIDTH / img.width)))
-                    img = img.resize((MAX_WIDTH, new_h), _RESAMPLE_LANCZOS)
+                with Image.open(io.BytesIO(resp.content)) as img:
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    if MAX_WIDTH > 0 and img.width > MAX_WIDTH:
+                        new_h = max(1, int(img.height * (MAX_WIDTH / img.width)))
+                        img = img.resize((MAX_WIDTH, new_h), _RESAMPLE_LANCZOS)
 
-                tmp_path = out_path + ".tmp"
-                img.save(tmp_path, format="JPEG", quality=JPG_QUALITY, optimize=True)
-                os.replace(tmp_path, out_path)
-            return "ok"
-        except Exception:
-            if attempt < RETRY_TIMES - 1:
-                time.sleep(0.5 * (attempt + 1))
-    return "err"
+                    tmp_path = out_path + ".tmp"
+                    img.save(tmp_path, format="JPEG", quality=JPG_QUALITY, optimize=True)
+                    os.replace(tmp_path, out_path)
+                return ("ok", cid, expected_sig or f"{subdir}:direct")
+            except Exception:
+                saw_error = True
+                if attempt < RETRY_TIMES - 1:
+                    time.sleep(0.5 * (attempt + 1))
+
+    return ("err" if saw_error else "404", cid, None)
 
 
-def merge_cache_into_ypk(cache_dir: str, ypk_path: str) -> int:
+def merge_cache_into_ypk(cache_dir: str, ypk_path: str) -> tuple[int, int]:
+    """将缓存卡图写入 ypk；若包含旧图升级则无冗余重建。返回 (新增数, 替换更新数)"""
     if not os.path.isdir(cache_dir):
-        return 0
+        return 0, 0
     cached_files = [
         fn for fn in os.listdir(cache_dir)
         if fn.lower().endswith(".jpg") and fn[:-4].isdigit()
     ]
     if not cached_files:
-        return 0
+        return 0, 0
 
     existing_names: set[str] = set()
     if os.path.isfile(ypk_path):
         with zipfile.ZipFile(ypk_path, "r") as zf:
             existing_names = set(zf.namelist())
 
-    added = 0
-    print(f"\n正在将 {len(cached_files)} 张卡图写入 {ypk_path} ...")
-    with zipfile.ZipFile(ypk_path, "a", compression=zipfile.ZIP_STORED) as zf:
-        for fn in cached_files:
-            arcname = f"pics/{fn}"
-            src_path = os.path.join(cache_dir, fn)
-            if arcname not in existing_names:
-                zf.write(src_path, arcname=arcname)
-                existing_names.add(arcname)
-                added += 1
-            try:
-                os.remove(src_path)
-            except OSError:
-                pass
+    overwrite_targets = {f"pics/{fn}" for fn in cached_files if f"pics/{fn}" in existing_names}
+    added = len(cached_files) - len(overwrite_targets)
+    replaced = len(overwrite_targets)
+
+    if overwrite_targets:
+        print(f"\n正在写入 {ypk_path}（新增 {added} 张，升级替换 {replaced} 张，正在无冗余重建压缩包）...")
+        tmp_ypk = ypk_path + ".rebuilding"
+        with zipfile.ZipFile(ypk_path, "r") as zf_in, zipfile.ZipFile(
+            tmp_ypk, "w", compression=zipfile.ZIP_STORED
+        ) as zf_out:
+            for info in zf_in.infolist():
+                if info.filename in overwrite_targets:
+                    continue
+                zf_out.writestr(info.filename, zf_in.read(info.filename))
+            for fn in cached_files:
+                zf_out.write(os.path.join(cache_dir, fn), arcname=f"pics/{fn}")
+        os.replace(tmp_ypk, ypk_path)
+    else:
+        print(f"\n正在将 {added} 张新卡图追加写入 {ypk_path} ...")
+        with zipfile.ZipFile(ypk_path, "a", compression=zipfile.ZIP_STORED) as zf:
+            for fn in cached_files:
+                zf.write(os.path.join(cache_dir, fn), arcname=f"pics/{fn}")
+
+    for fn in cached_files:
+        try:
+            os.remove(os.path.join(cache_dir, fn))
+        except OSError:
+            pass
 
     try:
         if not os.listdir(cache_dir):
             os.rmdir(cache_dir)
     except OSError:
         pass
-    return added
+    return added, replaced
+
+
+def sync_super_pre_overrides(
+    ypk_path: str,
+    lang: str,
+    override_ids: set[int],
+    updated_ids: set[int],
+) -> tuple[int, int]:
+    """
+    将与外部 .ypk（如超先行补丁）重叠的卡图从当前 ypk 镜像到最高优先级的 expansions/pics/，
+    并按清单清理旧语言或已转正移除的覆盖散图（绝不碰用户自定义文件）。
+    """
+    manifest = load_json(OVERRIDE_MANIFEST_PATH)
+    prev_lang = manifest.get("lang", "")
+    prev_files = set(manifest.get("files", [])) if isinstance(manifest.get("files"), list) else set()
+    lang_switched = (prev_lang != lang)
+
+    desired_names = {f"{cid}.jpg" for cid in override_ids}
+    to_remove = prev_files if lang_switched else (prev_files - desired_names)
+
+    removed = 0
+    for fn in to_remove:
+        target = os.path.join(LOOSE_PICS_DIR, fn)
+        if os.path.isfile(target):
+            try:
+                os.remove(target)
+                removed += 1
+            except OSError:
+                pass
+
+    written = 0
+    active_files: list[str] = []
+    if override_ids and os.path.isfile(ypk_path):
+        os.makedirs(LOOSE_PICS_DIR, exist_ok=True)
+        with zipfile.ZipFile(ypk_path, "r") as zf:
+            ypk_names = set(zf.namelist())
+            for cid in sorted(override_ids):
+                fn = f"{cid}.jpg"
+                arcname = f"pics/{fn}"
+                if arcname not in ypk_names:
+                    continue
+                dst = os.path.join(LOOSE_PICS_DIR, fn)
+                need_write = (
+                    lang_switched
+                    or (cid in updated_ids)
+                    or (not os.path.isfile(dst))
+                    or (os.path.getsize(dst) == 0)
+                )
+                if need_write:
+                    tmp_dst = dst + ".tmp"
+                    with open(tmp_dst, "wb") as out_f:
+                        out_f.write(zf.read(arcname))
+                    os.replace(tmp_dst, dst)
+                    written += 1
+                active_files.append(fn)
+
+    if active_files:
+        save_json(OVERRIDE_MANIFEST_PATH, {"lang": lang, "files": active_files})
+    elif os.path.isfile(OVERRIDE_MANIFEST_PATH):
+        try:
+            os.remove(OVERRIDE_MANIFEST_PATH)
+        except OSError:
+            pass
+
+    if os.path.isdir(LOOSE_PICS_DIR):
+        try:
+            if not os.listdir(LOOSE_PICS_DIR):
+                os.rmdir(LOOSE_PICS_DIR)
+        except OSError:
+            pass
+
+    return written, removed
 
 
 def parse_args():
@@ -233,9 +456,9 @@ def parse_args():
 def main():
     args = parse_args()
 
-    print("==============================================")
-    print("   KoishiPro-HTmod 高清卡图同步工具 (日文 / 简中)")
-    print("==============================================")
+    print("=====================================================")
+    print("   KoishiPro-HTmod 高清卡图同步工具 (日文 / 简中 / 先行)")
+    print("=====================================================")
     print(f"当前游戏目录: {BASE_DIR}\n")
 
     if not os.path.isfile(os.path.join(BASE_DIR, "cards.cdb")):
@@ -249,22 +472,23 @@ def main():
     else:
         print("请选择卡图语言版本：")
         print("  1. 日文卡图 (OCG)")
-        print("  2. 简中官方卡图 (SC，未发售简中卡自动回退原图)")
+        print("  2. 简中卡图 (官方简中优先，最新卡包/先行卡自动补齐高清中文图)")
         lang_choice = input("请输入选项 [1/2，默认 1]: ").strip() or "1"
         lang = "sc" if lang_choice == "2" else "jp"
 
     cfg = LANG_CONFIG[lang]
-    cdn_url = cfg["url"]
+    sources: list[str] = cfg["sources"]
     cache_dir = os.path.join(EXPANSIONS_DIR, cfg["cache"])
+    state_path = os.path.join(EXPANSIONS_DIR, cfg["state"])
 
     print("\n请选择同步范围：")
     print("  1. 仅同步 deck/ 目录中的全部卡组（极快，推荐先试）")
-    print("  2. 同步 cards.cdb 全卡池（支持断点续传与增量补齐）")
+    print("  2. 同步全卡池（含 cards.cdb 与超先行服补丁，支持断点续传与增量升级）")
     scope = input("请输入选项 [1/2，默认 1]: ").strip() or "1"
 
     print("\n请选择输出方式：")
-    print(f"  1. 打包为单个 expansions/{cfg['ypk']}（推荐：方便双语言一键切换与卸载）")
-    print("  2. 直接输出到 expansions/pics/ 散图目录（加载优先级最高）")
+    print(f"  1. 打包为 expansions/{cfg['ypk']} + 自动高优先级覆盖先行服卡图（推荐）")
+    print("  2. 全部输出到 expansions/pics/ 散图目录")
     out_mode = input("请输入选项 [1/2，默认 1]: ").strip() or "1"
 
     os.makedirs(EXPANSIONS_DIR, exist_ok=True)
@@ -273,67 +497,151 @@ def main():
     work_dir = cache_dir if use_ypk else LOOSE_PICS_DIR
     os.makedirs(work_dir, exist_ok=True)
 
-    target_ids = collect_ids_from_decks() if scope == "1" else collect_ids_from_cdbs()
+    print("\n正在扫描本地数据库与扩展补丁...")
+    ext_cdb_ids, ext_pic_ids = scan_external_ypks()
+    ext_override_pool = ext_cdb_ids | ext_pic_ids
+    if ext_override_pool:
+        print(f"检测到外部补丁/超先行卡: {len(ext_override_pool)} 张（将自动应用最高优先级覆盖）")
+
+    if scope == "1":
+        target_ids = collect_ids_from_decks()
+    else:
+        target_ids = collect_ids_from_local_cdbs() | ext_cdb_ids
+
     if not target_ids:
         print("\n[提示] 未读取到任何卡片 ID，已退出。")
         return
+
+    # 拉取百鸽各源的 metadata 索引
+    print("正在从百鸽拉取卡图索引 (metadata)...")
+    metas: dict[str, dict[int, str] | None] = {}
+    all_meta_ok = True
+    for src in sources:
+        m = fetch_metadata(src)
+        metas[src] = m
+        if m is None:
+            all_meta_ok = False
+            print(f"  - [{src}] 索引获取失败，将降级为直接尝试下载模式")
+        else:
+            print(f"  - [{src}] 已加载 {len(m)} 条卡图索引")
+
+    local_state: dict[str, str] = load_json(state_path)
+    state_dirty = False
 
     existing_ids = get_existing_ids_in_dir(work_dir)
     if use_ypk:
         existing_ids |= get_existing_ids_in_ypk(ypk_path)
 
-    todo_ids = sorted(target_ids - existing_ids)
+    # 规划待下载 / 待升级任务: (cid, subdirs, expected_sig, is_upgrade)
+    tasks: list[tuple[int, list[str], str | None, bool]] = []
+    skipped_no_art = 0
+    skipped_uptodate = 0
+    upgrade_cnt = 0
+
+    for cid in sorted(target_ids):
+        cid_key = str(cid)
+        if all_meta_ok:
+            chosen_src = None
+            chosen_sig = None
+            for src in sources:
+                src_meta = metas[src]
+                if src_meta and cid in src_meta:
+                    chosen_src = src
+                    chosen_sig = f"{src}:{src_meta[cid]}"
+                    break
+            if chosen_src is None:
+                skipped_no_art += 1
+                continue
+
+            if cid in existing_ids:
+                saved_sig = local_state.get(cid_key)
+                if saved_sig is None:
+                    # 兼容旧版生成的卡图包：首次运行回填当前索引签名，避免重复下载
+                    local_state[cid_key] = chosen_sig
+                    state_dirty = True
+                    skipped_uptodate += 1
+                    continue
+                if saved_sig == chosen_sig:
+                    skipped_uptodate += 1
+                    continue
+                tasks.append((cid, [chosen_src], chosen_sig, True))
+                upgrade_cnt += 1
+            else:
+                tasks.append((cid, [chosen_src], chosen_sig, False))
+        else:
+            if cid in existing_ids:
+                skipped_uptodate += 1
+                continue
+            tasks.append((cid, sources, None, False))
+
+    new_cnt = len(tasks) - upgrade_cnt
     print(
-        f"\n[{cfg['name']}] 目标总数: {len(target_ids)} | "
-        f"已存在跳过: {len(target_ids) - len(todo_ids)} | 待下载: {len(todo_ids)}"
+        f"\n[{cfg['name']}] 目标: {len(target_ids)} | 已最新跳过: {skipped_uptodate} | "
+        f"图库暂无: {skipped_no_art} | 待新下: {new_cnt} | 待升级替换: {upgrade_cnt}"
     )
 
-    if not todo_ids:
-        if use_ypk:
-            added = merge_cache_into_ypk(cache_dir, ypk_path)
-            if added:
-                print(f"已补写 {added} 张缓存卡图到 {cfg['ypk']}。")
-        print("全部目标卡图已是最新，无需下载！")
-        return
+    updated_cids: set[int] = set()
+    err_cnt = 0
 
-    ok_cnt = notfound_cnt = err_cnt = done_cnt = 0
-    total = len(todo_ids)
-    start_ts = time.time()
-    print("开始下载并转码为 JPG（可随时按 Ctrl+C 安全暂停并保存进度）...\n")
+    if tasks:
+        ok_cnt = notfound_cnt = done_cnt = 0
+        total = len(tasks)
+        start_ts = time.time()
+        print("开始下载并转码为 JPG（可随时按 Ctrl+C 安全暂停并保存进度）...\n")
 
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
-    futures = [executor.submit(download_and_convert, cid, work_dir, cdn_url) for cid in todo_ids]
-    try:
-        for fut in concurrent.futures.as_completed(futures):
-            res = fut.result()
-            done_cnt += 1
-            if res == "ok":
-                ok_cnt += 1
-            elif res == "404":
-                notfound_cnt += 1
-            else:
-                err_cnt += 1
-            elapsed = max(0.1, time.time() - start_ts)
-            speed = done_cnt / elapsed
-            print(
-                f"\r进度: {done_cnt}/{total} ({done_cnt * 100 / total:.1f}%) | "
-                f"成功: {ok_cnt} | 无官图跳过: {notfound_cnt} | 失败: {err_cnt} | "
-                f"{speed:.1f} 张/秒   ",
-                end="",
-                flush=True,
-            )
-    except KeyboardInterrupt:
-        print("\n\n[已中断] 正在等待当前线程收尾并保存已下载的卡图...")
-        executor.shutdown(wait=True, cancel_futures=True)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
+        futures = [
+            executor.submit(download_and_convert, cid, subdirs, sig, work_dir)
+            for cid, subdirs, sig, _ in tasks
+        ]
+        try:
+            for fut in concurrent.futures.as_completed(futures):
+                res, cid, sig = fut.result()
+                done_cnt += 1
+                if res == "ok":
+                    ok_cnt += 1
+                    updated_cids.add(cid)
+                    if sig:
+                        local_state[str(cid)] = sig
+                        state_dirty = True
+                elif res == "404":
+                    notfound_cnt += 1
+                else:
+                    err_cnt += 1
+                elapsed = max(0.1, time.time() - start_ts)
+                speed = done_cnt / elapsed
+                print(
+                    f"\r进度: {done_cnt}/{total} ({done_cnt * 100 / total:.1f}%) | "
+                    f"成功: {ok_cnt} | 无图: {notfound_cnt} | 失败: {err_cnt} | "
+                    f"{speed:.1f} 张/秒   ",
+                    end="",
+                    flush=True,
+                )
+        except KeyboardInterrupt:
+            print("\n\n[已中断] 正在等待当前线程收尾并保存已下载的卡图...")
+            executor.shutdown(wait=True, cancel_futures=True)
+        else:
+            executor.shutdown(wait=True)
+        print()
     else:
-        executor.shutdown(wait=True)
+        print("所有可用卡图均已是最新版本，无需下载。")
 
-    print()
     if use_ypk:
-        added = merge_cache_into_ypk(cache_dir, ypk_path)
-        print(f"写入完成！本次新增打包 {added} 张，输出路径: {ypk_path}")
+        added, replaced = merge_cache_into_ypk(cache_dir, ypk_path)
+        if added or replaced:
+            print(f"写入完成！新增 {added} 张，升级替换 {replaced} 张 -> {ypk_path}")
+
+        # 同步外部补丁 / 超先行卡的高优先级散图覆盖
+        override_ids = ext_override_pool if scope != "1" else (target_ids & ext_override_pool)
+        written, removed = sync_super_pre_overrides(ypk_path, lang, override_ids, updated_cids)
+        if written or removed:
+            print(f"[先行服高优先级覆盖] 已更新 {written} 张，清理旧覆盖 {removed} 张 -> expansions/pics/")
     else:
-        print(f"同步完成！卡图已保存至: {LOOSE_PICS_DIR}")
+        if tasks:
+            print(f"同步完成！卡图已保存至: {LOOSE_PICS_DIR}")
+
+    if state_dirty:
+        save_json(state_path, local_state)
 
     if err_cnt > 0:
         print(f"[提示] 有 {err_cnt} 张因网络波动下载失败，重新运行即可自动补齐。")
