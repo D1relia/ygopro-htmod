@@ -632,6 +632,14 @@ bool Game::Initialize() {
 	chkEnablePScale = env->addCheckBox(false, irr::core::rect<irr::s32>(posX, posY, posX + chkBoxLabelWidth, posY + 25), tabSystem, -1, L"显示灵摆刻度");
 	chkEnablePScale->setChecked(gameConf.chkEnablePScale != 0);
 	posY += 30;
+	env->addStaticText(L"场地不透明度", irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 148, posY + 28), false, false, tabSystem);
+	scrFieldAlpha = env->addScrollBar(true, irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, SCROLL_FIELD_ALPHA);
+	scrFieldAlpha->setMax(100);
+	scrFieldAlpha->setMin(0);
+	scrFieldAlpha->setPos(gameConf.field_spell_alpha);
+	scrFieldAlpha->setLargeStep(5);
+	scrFieldAlpha->setSmallStep(1);
+	posY += 30;
 	env->addStaticText(L"语言", irr::core::rect<irr::s32>(posX + 23, posY + 3, posX + 160, posY + 28), false, false, tabSystem);
 	cbLocale = env->addComboBox(irr::core::rect<irr::s32>(posX + 150, posY + 4, posX + 250, posY + 21), tabSystem, COMBOBOX_LOCALE);
 	RefreshLocales();
@@ -2027,6 +2035,8 @@ bool Game::LoadConfigFromFile(const char* file) {
 			gameConf.control_mode = std::strtol(valbuf, nullptr, 10);
 		} else if(!std::strcmp(strbuf, "draw_field_spell")) {
 			gameConf.draw_field_spell = std::strtol(valbuf, nullptr, 10);
+		} else if(!std::strcmp(strbuf, "field_spell_alpha")) {
+			gameConf.field_spell_alpha = std::max(0, std::min(100, static_cast<int>(std::strtol(valbuf, nullptr, 10))));
 		} else if(!std::strcmp(strbuf, "separate_clear_button")) {
 			gameConf.separate_clear_button = std::strtol(valbuf, nullptr, 10);
 		} else if(!std::strcmp(strbuf, "auto_search_limit")) {
@@ -2298,6 +2308,7 @@ void Game::SaveConfig() {
 	std::fprintf(fp, "#control_mode = 0: Key A/S/D/R Chain Buttons. control_mode = 1: MouseLeft/MouseRight/NULL/F9 Without Chain Buttons\n");
 	std::fprintf(fp, "control_mode = %d\n", gameConf.control_mode);
 	std::fprintf(fp, "draw_field_spell = %d\n", gameConf.draw_field_spell);
+	std::fprintf(fp, "field_spell_alpha = %d\n", gameConf.field_spell_alpha);
 	std::fprintf(fp, "separate_clear_button = %d\n", gameConf.separate_clear_button);
 	std::fprintf(fp, "#auto_search_limit >= 0: Start search automatically when the user enters N chars\n");
 	std::fprintf(fp, "auto_search_limit = %d\n", gameConf.auto_search_limit);
@@ -3038,6 +3049,7 @@ void Game::OnResize() {
 	fitTabCtrlRight(cbSkin);
 	fitTabCtrlRight(cbResolution);
 	fitTabCtrlRight(scrResizePopupMenu);
+	fitTabCtrlRight(scrFieldAlpha);
 
 	irr::core::recti tabHelperPos(tabPadX, tabPadY, tabPadX + tabContentW, infoBodyH - tabPadY);
 	tabHelper->setRelativePosition(tabHelperPos);
