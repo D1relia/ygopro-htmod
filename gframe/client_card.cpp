@@ -181,7 +181,7 @@ void ClientCard::UpdateInfo(unsigned char* buf) {
 		if (link != (unsigned int)pdata) {
 			link = pdata;
 		}
-		myswprintf(linkstring, L"L\x2012%d", link);
+		myswprintf(linkstring, L"Link%d", link);
 		pdata = BufferIO::Read<int32_t>(buf);
 		if (link_marker != (unsigned int)pdata) {
 			link_marker = pdata;
