@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -55,6 +56,7 @@ else:
 
 EXPANSIONS_DIR = os.path.join(BASE_DIR, "expansions")
 LOOSE_PICS_DIR = os.path.join(EXPANSIONS_DIR, "pics")
+BACKUP_PICS_DIR = os.path.join(EXPANSIONS_DIR, "_htmod_pics_backup")
 OVERRIDE_MANIFEST_PATH = os.path.join(EXPANSIONS_DIR, "_htmod_override_manifest.json")
 CARDS_MAP_CACHE_PATH = os.path.join(EXPANSIONS_DIR, "_ygocdb_cards_map.json")
 OWN_YPK_NAMES = {cfg["ypk"].lower() for cfg in LANG_CONFIG.values()}
@@ -62,7 +64,7 @@ OWN_YPK_NAMES = {cfg["ypk"].lower() for cfg in LANG_CONFIG.values()}
 _thread_local = threading.local()
 _RESAMPLE_LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
 _YPK_PIC_RE = re.compile(r"(?:^|/)pics/(\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
-_NAME_CLEAN_RE = re.compile(r"[\s·・•\-－—–_“”「」『』\"'：:，,。\.！!？?（）()【】\[\]~～]+")
+_NAME_CLEAN_RE = re.compile(r"[\s·・•‧･\-－—–_“”「」『』\"'：:，,。\.！!？?（）()【】\[\]~～]+")
 
 
 def get_session() -> requests.Session:
@@ -84,7 +86,6 @@ def normalize_name(name: str) -> str:
 
 
 def read_cdb_file(cdb_path: str) -> tuple[set[int], dict[int, set[str]]]:
-    """从单个 cdb 读取所有卡密及 id -> 卡名集合"""
     ids: set[int] = set()
     names: dict[int, set[str]] = {}
     conn = None
@@ -157,10 +158,6 @@ def collect_from_local_cdbs() -> tuple[set[int], dict[int, set[str]]]:
 
 
 def scan_external_ypks() -> tuple[set[int], set[int], dict[int, set[str]]]:
-    """
-    扫描 expansions/ 下除自身卡图包之外的 .ypk / .zip（例如超先行服补丁）：
-    返回 (外部补丁 cdb 中的卡密集合, 外部补丁自带 pics/ 的卡密集合, id -> 卡名集合)
-    """
     cdb_ids: set[int] = set()
     pic_ids: set[int] = set()
     names: dict[int, set[str]] = {}
@@ -229,10 +226,6 @@ def save_json(path: str, data: dict) -> None:
 
 
 def load_ygocdb_name_map() -> dict[str, list[int]]:
-    """
-    通过百鸽 cards.zip（配合 cards.zip.md5 本地缓存）构建 标准化卡名 -> [正式8位卡密, ...] 映射，
-    用于将超先行 9 位临时 ID（如 101307067）自动桥接到已转正的 8 位正式卡密（如 71599345）。
-    """
     session = get_session()
     cached = load_json(CARDS_MAP_CACHE_PATH)
     cached_md5 = str(cached.get("md5", "")).strip().lower()
@@ -266,8 +259,12 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
                 for item in raw_cards.values():
                     if not isinstance(item, dict):
                         continue
-                    official_id = item.get("id")
-                    if not isinstance(official_id, int) or official_id <= 0:
+                    raw_id = item.get("id")
+                    try:
+                        official_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if official_id <= 0:
                         continue
                     for field in name_fields:
                         val = item.get(field)
@@ -296,7 +293,6 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
 
 
 def fetch_metadata(subdir: str) -> dict[int, str] | None:
-    """拉取百鸽指定目录的 metadata，返回 {卡密: 签名(md5)}；失败返回 None"""
     url = f"{CDN_BASE}/{subdir}/metadata"
     session = get_session()
     for attempt in range(RETRY_TIMES):
@@ -327,7 +323,6 @@ def fetch_metadata(subdir: str) -> dict[int, str] | None:
 
 
 def switch_active_ypk(lang: str) -> str:
-    """启用目标语言 ypk，并将另一语言的 ypk 暂存为 .disabled 避免冲突"""
     target_ypk = os.path.join(EXPANSIONS_DIR, LANG_CONFIG[lang]["ypk"])
     target_disabled = target_ypk + ".disabled"
 
@@ -383,10 +378,6 @@ def download_and_convert(
     expected_sig: str | None,
     out_dir: str,
 ) -> tuple[str, int, str | None]:
-    """
-    下载 remote_cid 对应的 webp 并转码保存为 local_cid.jpg。
-    返回值: ('ok' | '404' | 'err', local_cid, sig)
-    """
     out_path = os.path.join(out_dir, f"{local_cid}.jpg")
     session = get_session()
     saw_error = False
@@ -424,7 +415,6 @@ def download_and_convert(
 
 
 def merge_cache_into_ypk(cache_dir: str, ypk_path: str) -> tuple[int, int]:
-    """将缓存卡图写入 ypk；若包含旧图升级则无冗余重建。返回 (新增数, 替换更新数)"""
     if not os.path.isdir(cache_dir):
         return 0, 0
     cached_files = [
@@ -480,11 +470,10 @@ def sync_super_pre_overrides(
     ypk_path: str,
     lang: str,
     override_ids: set[int],
-    updated_ids: set[int],
 ) -> tuple[int, int]:
     """
-    将与外部 .ypk（如超先行补丁）重叠的卡图从当前 ypk 镜像到最高优先级的 expansions/pics/，
-    并按清单清理旧语言或已转正移除的覆盖散图（绝不碰用户自定义文件）。
+    将外部补丁 / 现有散图 / 9位先行卡的卡图，从当前 ypk 按字节比对强制同步到 expansions/pics/；
+    覆写前自动备份原有散图到 _htmod_pics_backup/，清理时优先还原备份。
     """
     manifest = load_json(OVERRIDE_MANIFEST_PATH)
     prev_lang = manifest.get("lang", "")
@@ -498,12 +487,20 @@ def sync_super_pre_overrides(
 
     available_override_ids = [cid for cid in sorted(override_ids) if f"pics/{cid}.jpg" in ypk_names]
     desired_names = {f"{cid}.jpg" for cid in available_override_ids}
-    to_remove = prev_files if lang_switched else (prev_files - desired_names)
+    to_remove = (prev_files - desired_names) if not lang_switched else (prev_files - desired_names)
 
     removed = 0
     for fn in to_remove:
         target = os.path.join(LOOSE_PICS_DIR, fn)
-        if os.path.isfile(target):
+        backup = os.path.join(BACKUP_PICS_DIR, fn)
+        if os.path.isfile(backup):
+            os.makedirs(LOOSE_PICS_DIR, exist_ok=True)
+            try:
+                os.replace(backup, target)
+                removed += 1
+            except OSError:
+                pass
+        elif os.path.isfile(target):
             try:
                 os.remove(target)
                 removed += 1
@@ -519,16 +516,30 @@ def sync_super_pre_overrides(
                 fn = f"{cid}.jpg"
                 arcname = f"pics/{fn}"
                 dst = os.path.join(LOOSE_PICS_DIR, fn)
-                need_write = (
-                    lang_switched
-                    or (cid in updated_ids)
-                    or (not os.path.isfile(dst))
-                    or (os.path.getsize(dst) == 0)
-                )
+                ypk_bytes = zf.read(arcname)
+
+                need_write = True
+                if os.path.isfile(dst) and os.path.getsize(dst) == len(ypk_bytes):
+                    try:
+                        with open(dst, "rb") as cur_f:
+                            if cur_f.read() == ypk_bytes:
+                                need_write = False
+                    except OSError:
+                        need_write = True
+
                 if need_write:
+                    # 若原本磁盘已有非本工具写入的散图（如先行服原图），先备份一份以便日后可逆还原
+                    if os.path.isfile(dst) and fn not in prev_files:
+                        os.makedirs(BACKUP_PICS_DIR, exist_ok=True)
+                        bk = os.path.join(BACKUP_PICS_DIR, fn)
+                        if not os.path.isfile(bk):
+                            try:
+                                shutil.copy2(dst, bk)
+                            except OSError:
+                                pass
                     tmp_dst = dst + ".tmp"
                     with open(tmp_dst, "wb") as out_f:
-                        out_f.write(zf.read(arcname))
+                        out_f.write(ypk_bytes)
                     os.replace(tmp_dst, dst)
                     written += 1
                 active_files.append(fn)
@@ -541,12 +552,13 @@ def sync_super_pre_overrides(
         except OSError:
             pass
 
-    if os.path.isdir(LOOSE_PICS_DIR):
-        try:
-            if not os.listdir(LOOSE_PICS_DIR):
-                os.rmdir(LOOSE_PICS_DIR)
-        except OSError:
-            pass
+    for folder in (LOOSE_PICS_DIR, BACKUP_PICS_DIR):
+        if os.path.isdir(folder):
+            try:
+                if not os.listdir(folder):
+                    os.rmdir(folder)
+            except OSError:
+                pass
 
     return written, removed
 
@@ -606,20 +618,26 @@ def main():
     ext_cdb_ids, ext_pic_ids, ext_names = scan_external_ypks()
     merge_name_maps(id_to_names, ext_names)
 
-    ext_override_pool = ext_cdb_ids | ext_pic_ids
+    loose_pic_ids = get_existing_ids_in_dir(LOOSE_PICS_DIR)
+    pre_9digit_ids = {cid for cid in (local_cdb_ids | ext_cdb_ids) if cid >= 100000000}
+
+    # 覆盖池涵盖：外部 ypk 卡片、expansions/pics 现有散图、以及所有 9 位先行卡
+    ext_override_pool = ext_cdb_ids | ext_pic_ids | loose_pic_ids | pre_9digit_ids
     if ext_override_pool:
-        print(f"检测到外部补丁/超先行卡: {len(ext_override_pool)} 张（将自动应用最高优先级覆盖）")
+        print(
+            f"检测到需高优先级覆盖的补丁/散图/先行卡: {len(ext_override_pool)} 张"
+            f"（其中 9 位先行卡 {len(pre_9digit_ids)} 张，现有散图 {len(loose_pic_ids)} 张）"
+        )
 
     if scope == "1":
         target_ids = collect_ids_from_decks()
     else:
-        target_ids = local_cdb_ids | ext_cdb_ids
+        target_ids = local_cdb_ids | ext_cdb_ids | pre_9digit_ids
 
     if not target_ids:
         print("\n[提示] 未读取到任何卡片 ID，已退出。")
         return
 
-    # 拉取百鸽各源的 metadata 索引
     print("正在从百鸽拉取卡图索引 (metadata)...")
     metas: dict[str, dict[int, str] | None] = {}
     all_meta_ok = True
@@ -632,7 +650,6 @@ def main():
         else:
             print(f"  - [{src}] 已加载 {len(m)} 条卡图索引")
 
-    # 检查是否存在 9 位先行卡或外部补丁卡在 metadata 中直接查不到，按需加载百鸽卡名桥接表
     def find_in_metas(check_id: int) -> tuple[str | None, str | None]:
         for src in sources:
             src_meta = metas.get(src)
@@ -640,37 +657,47 @@ def main():
                 return src, src_meta[check_id]
         return None, None
 
+    # 所有 9 位先行卡无条件优先通过卡名桥接 8 位正式卡密；其他外部补丁卡查不到时也桥接
     need_bridge_cids = [
         cid for cid in target_ids
-        if (cid >= 100000000 or cid in ext_override_pool)
-        and (not all_meta_ok or find_in_metas(cid)[0] is None)
-        and cid in id_to_names
+        if cid in id_to_names and (
+            cid >= 100000000
+            or (cid in ext_override_pool and (not all_meta_ok or find_in_metas(cid)[0] is None))
+        )
     ]
 
     bridged_map: dict[int, int] = {}
     if need_bridge_cids:
         ygocdb_name_map = load_ygocdb_name_map()
         if ygocdb_name_map:
-            for local_cid in need_bridge_cids:
+            for local_cid in sorted(need_bridge_cids):
                 matched_remote = None
                 for raw_name in id_to_names.get(local_cid, ()):
                     norm = normalize_name(raw_name)
                     cand_ids = ygocdb_name_map.get(norm)
                     if not cand_ids:
                         continue
+                    # 优先选择正式 8 位卡密（< 100000000）
+                    ordered_cands = sorted(cand_ids, key=lambda x: (x >= 100000000, x))
                     if all_meta_ok:
-                        for cand in cand_ids:
+                        for cand in ordered_cands:
                             if find_in_metas(cand)[0] is not None:
                                 matched_remote = cand
                                 break
                     if matched_remote is None:
-                        matched_remote = cand_ids[0]
+                        matched_remote = ordered_cands[0]
                     if matched_remote is not None:
                         break
                 if matched_remote is not None and matched_remote != local_cid:
                     bridged_map[local_cid] = matched_remote
+
             if bridged_map:
-                print(f"  - 已通过卡名自动桥接先行临时卡密 -> 正式卡密: {len(bridged_map)} 张")
+                print(f"  - 已通过卡名自动桥接先行卡密 -> 正式卡密: {len(bridged_map)} 张")
+                for sample_local in list(bridged_map.keys())[:8]:
+                    sample_remote = bridged_map[sample_local]
+                    sample_name = next(iter(id_to_names.get(sample_local, ("?",))))
+                    src_hit, _ = find_in_metas(sample_remote)
+                    print(f"      · {sample_local} ({sample_name}) -> {sample_remote} [{src_hit or 'direct'}]")
 
     local_state: dict[str, str] = load_json(state_path)
     state_dirty = False
@@ -679,7 +706,6 @@ def main():
     if use_ypk:
         existing_ids |= get_existing_ids_in_ypk(ypk_path)
 
-    # 规划待下载 / 待升级任务: (local_cid, remote_cid, subdirs, expected_sig, is_upgrade)
     tasks: list[tuple[int, int, list[str], str | None, bool]] = []
     skipped_no_art = 0
     skipped_uptodate = 0
@@ -692,8 +718,13 @@ def main():
         if all_meta_ok:
             chosen_src, raw_md5 = find_in_metas(remote_cid)
             if chosen_src is None or raw_md5 is None:
-                skipped_no_art += 1
-                continue
+                # 若桥接后的 ID 无图，再回退检查本地原 ID
+                if remote_cid != local_cid:
+                    remote_cid = local_cid
+                    chosen_src, raw_md5 = find_in_metas(local_cid)
+                if chosen_src is None or raw_md5 is None:
+                    skipped_no_art += 1
+                    continue
 
             if remote_cid == local_cid:
                 chosen_sig = f"{chosen_src}:{raw_md5}"
@@ -702,7 +733,8 @@ def main():
 
             if local_cid in existing_ids:
                 saved_sig = local_state.get(cid_key)
-                if saved_sig is None:
+                # 仅普通 8 位正式老卡在缺少 state 时回填跳过；9 位先行卡或桥接卡必须核验签名并升级覆写
+                if saved_sig is None and remote_cid == local_cid and local_cid < 100000000:
                     local_state[cid_key] = chosen_sig
                     state_dirty = True
                     skipped_uptodate += 1
@@ -715,10 +747,10 @@ def main():
             else:
                 tasks.append((local_cid, remote_cid, [chosen_src], chosen_sig, False))
         else:
-            if local_cid in existing_ids:
+            if local_cid in existing_ids and remote_cid == local_cid and local_cid < 100000000:
                 skipped_uptodate += 1
                 continue
-            tasks.append((local_cid, remote_cid, sources, None, False))
+            tasks.append((local_cid, remote_cid, sources, None, local_cid in existing_ids))
 
     new_cnt = len(tasks) - upgrade_cnt
     print(
@@ -726,9 +758,7 @@ def main():
         f"图库暂无: {skipped_no_art} | 待新下: {new_cnt} | 待升级替换: {upgrade_cnt}"
     )
 
-    updated_cids: set[int] = set()
     err_cnt = 0
-
     if tasks:
         ok_cnt = notfound_cnt = done_cnt = 0
         total = len(tasks)
@@ -746,7 +776,6 @@ def main():
                 done_cnt += 1
                 if res == "ok":
                     ok_cnt += 1
-                    updated_cids.add(local_cid)
                     if sig:
                         local_state[str(local_cid)] = sig
                         state_dirty = True
@@ -777,10 +806,9 @@ def main():
         if added or replaced:
             print(f"写入完成！新增 {added} 张，升级替换 {replaced} 张 -> {ypk_path}")
 
-        # 将所有存在于当前 ypk 中的超先行卡同步到最高优先级的 expansions/pics/
-        written, removed = sync_super_pre_overrides(ypk_path, lang, ext_override_pool, updated_cids)
+        written, removed = sync_super_pre_overrides(ypk_path, lang, ext_override_pool)
         if written or removed:
-            print(f"[先行服高优先级覆盖] 已更新 {written} 张，清理旧覆盖 {removed} 张 -> expansions/pics/")
+            print(f"[先行服高优先级覆盖] 已强制同步 {written} 张，清理/还原 {removed} 张 -> expansions/pics/")
     else:
         if tasks:
             print(f"同步完成！卡图已保存至: {LOOSE_PICS_DIR}")
