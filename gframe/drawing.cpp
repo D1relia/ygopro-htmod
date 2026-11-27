@@ -363,7 +363,7 @@ void Game::DrawBackGround() {
 				// 先铺深色原版棋盘底板，再按不透明度叠场地贴图，避免画面发花
 				irr::video::SMaterial baseMat = matManager.mTexture;
 				baseMat.setTexture(0, imageManager.tField[rule]);
-				baseMat.ZWriteEnable = false;
+				baseMat.ZWriteEnable = irr::video::EZW_OFF;
 				driver->setMaterial(baseMat);
 				driver->drawVertexPrimitiveList(matManager.vField, 4, matManager.iRectangle, 2);
 				drawField = true;
@@ -376,7 +376,7 @@ void Game::DrawBackGround() {
 			irr::video::SMaterial fieldMat = matManager.mTexture;
 			fieldMat.setTexture(0, tex);
 			fieldMat.Lighting = false;
-			fieldMat.ZWriteEnable = false;
+			fieldMat.ZWriteEnable = irr::video::EZW_OFF;
 			if(alpha < 255)
 				fieldMat.MaterialType = irr::video::EMT_TRANSPARENT_VERTEX_ALPHA;
 			driver->setMaterial(fieldMat);
