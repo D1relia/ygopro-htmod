@@ -591,8 +591,13 @@ void ClientField::ShowSelectOption(int select_hint) {
 	int count = select_options.size();
 	bool quickmode = true;
 	mainGame->gMutex.lock();
+	float uiScale = (mainGame->xScale < mainGame->yScale) ? mainGame->xScale : mainGame->yScale;
+	irr::u32 maxOptWidth = static_cast<irr::u32>(310.0f * uiScale + 0.5f);
+	irr::s32 btnW = mainGame->btnOption[0]->getRelativePosition().getWidth();
+	if(btnW > 20)
+		maxOptWidth = static_cast<irr::u32>(btnW - 12);
 	for(auto option : select_options) {
-		if(mainGame->GetGUIFontDimension(dataManager.GetDesc(option)).Width > 310) {
+		if(mainGame->GetGUIFontDimension(dataManager.GetDesc(option)).Width > maxOptWidth) {
 			quickmode = false;
 			break;
 		}
@@ -601,8 +606,12 @@ void ClientField::ShowSelectOption(int select_hint) {
 		const wchar_t* option = dataManager.GetDesc(select_options[i]);
 		mainGame->btnOption[i]->setText(option);
 	}
+	irr::s32 pad = static_cast<irr::s32>(16.0f * uiScale + 0.5f);
+	irr::s32 newwidth = static_cast<irr::s32>(350.0f * uiScale + 0.5f);
+	irr::s32 newheight = static_cast<irr::s32>(140.0f * uiScale + 0.5f);
 	if(quickmode) {
 		bool scrollbar = count > 5;
+		int visibleCount = scrollbar ? 5 : count;
 		mainGame->scrOption->setVisible(scrollbar);
 		mainGame->scrOption->setPos(0);
 		mainGame->scrOption->setMax(scrollbar ? (count - 5) : 1);
@@ -612,25 +621,40 @@ void ClientField::ShowSelectOption(int select_hint) {
 		mainGame->btnOptionOK->setVisible(false);
 		for(int i = 0; i < 5; i++)
 			mainGame->btnOption[i]->setVisible(i < count);
-		irr::core::recti pos = mainGame->wOptions->getRelativePosition();
-		int newheight = 30 + 40 * (scrollbar ? 5 : count);
-		int oldheight = pos.LowerRightCorner.Y - pos.UpperLeftCorner.Y;
-		pos.UpperLeftCorner.Y = pos.UpperLeftCorner.Y + (oldheight - newheight) / 2;
-		pos.LowerRightCorner.X = pos.UpperLeftCorner.X + (scrollbar ? 375 : 350);
-		pos.LowerRightCorner.Y = pos.UpperLeftCorner.Y + newheight;
-		mainGame->wOptions->setRelativePosition(pos);
+		newwidth = static_cast<irr::s32>((scrollbar ? 375.0f : 350.0f) * uiScale + 0.5f);
+		newheight = static_cast<irr::s32>((30.0f + 40.0f * (visibleCount > 0 ? visibleCount : 1)) * uiScale + 0.5f);
+		if(visibleCount > 0) {
+			irr::core::recti lastBtn = mainGame->btnOption[visibleCount - 1]->getRelativePosition();
+			if(lastBtn.LowerRightCorner.Y + pad > newheight)
+				newheight = lastBtn.LowerRightCorner.Y + pad;
+			if(!scrollbar && lastBtn.LowerRightCorner.X + pad > newwidth)
+				newwidth = lastBtn.LowerRightCorner.X + pad;
+		}
+		if(scrollbar) {
+			irr::core::recti scrRect = mainGame->scrOption->getRelativePosition();
+			if(scrRect.LowerRightCorner.X + pad > newwidth)
+				newwidth = scrRect.LowerRightCorner.X + pad;
+		}
 	} else {
-		mainGame->SetStaticText(mainGame->stOptions, 310, mainGame->guiFont, dataManager.GetDesc(select_options[0]));
+		mainGame->scrOption->setVisible(false);
+		mainGame->SetStaticText(mainGame->stOptions, maxOptWidth, mainGame->guiFont, dataManager.GetDesc(select_options[0]));
 		mainGame->stOptions->setVisible(true);
 		mainGame->btnOptionp->setVisible(false);
 		mainGame->btnOptionn->setVisible(count > 1);
 		mainGame->btnOptionOK->setVisible(true);
 		for(int i = 0; i < 5; i++)
 			mainGame->btnOption[i]->setVisible(false);
-		irr::core::recti pos = mainGame->wOptions->getRelativePosition();
-		pos.LowerRightCorner.Y = pos.UpperLeftCorner.Y + 140;
-		mainGame->wOptions->setRelativePosition(pos);
+		irr::core::recti okBtn = mainGame->btnOptionOK->getRelativePosition();
+		irr::core::recti nextBtn = mainGame->btnOptionn->getRelativePosition();
+		if(okBtn.LowerRightCorner.Y + pad > newheight)
+			newheight = okBtn.LowerRightCorner.Y + pad;
+		if(nextBtn.LowerRightCorner.X + pad > newwidth)
+			newwidth = nextBtn.LowerRightCorner.X + pad;
 	}
+	irr::s32 cx = static_cast<irr::s32>(663.0f * mainGame->xScale + 0.5f);
+	irr::s32 cy = static_cast<irr::s32>(303.0f * mainGame->yScale + 0.5f);
+	irr::core::recti pos(cx - newwidth / 2, cy - newheight / 2, cx - newwidth / 2 + newwidth, cy - newheight / 2 + newheight);
+	mainGame->wOptions->setRelativePosition(pos);
 	if(select_hint)
 		myswprintf(textBuffer, L"%ls", dataManager.GetDesc(select_hint));
 	else
