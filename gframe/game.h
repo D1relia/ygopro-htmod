@@ -101,6 +101,7 @@ struct Config {
 	int hide_hint_button{ 0 };
 	int control_mode{ 0 };
 	int draw_field_spell{ 1 };
+	int field_spell_alpha{ 45 };
 	int separate_clear_button{ 1 };
 	int auto_search_limit{ -1 };
 	int search_multiple_keywords{ 1 };
@@ -495,6 +496,8 @@ public:
 	irr::gui::IGUICheckBox* chkEnableMusic{};
 	irr::gui::IGUIScrollBar* scrSoundVolume{};
 	irr::gui::IGUIScrollBar* scrMusicVolume{};
+	irr::gui::IGUIScrollBar* scrFieldAlpha{};
+	static constexpr irr::s32 SCROLL_FIELD_ALPHA = 9901;
 	irr::gui::IGUICheckBox* chkMusicMode{};
 	irr::gui::IGUICheckBox* chkResizeSelectWindow{};
 	irr::gui::IGUICheckBox* chkResizePopupMenu{};
