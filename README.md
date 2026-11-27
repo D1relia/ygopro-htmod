@@ -8,7 +8,7 @@
 
 > 所有译名补丁与卡图资源均独立存放在 `expansions/` 目录中，**不修改萌卡原版 `cards.cdb`**，随时可一键还原。
 
-[效果预览](docs/preview.png)
+![image](docs/preview.png)
 
 ---
 
