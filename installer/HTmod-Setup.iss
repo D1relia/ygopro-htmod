@@ -52,14 +52,13 @@ Source: "fonts\MiSans-Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
 #ifexist "..\bin\installer\SC_Updater.exe"
 Source: "..\bin\installer\SC_Updater.exe"; DestDir: "{app}"; DestName: "更新简中官方译名.exe"; Flags: ignoreversion
 #endif
+#ifexist "..\bin\installer\JP_Pics_Updater.exe"
+Source: "..\bin\installer\JP_Pics_Updater.exe"; DestDir: "{app}"; DestName: "更新日文卡图.exe"; Flags: ignoreversion
+#endif
 
 #ifexist "..\bin\installer\SC_Updater.exe"
 [Run]
 Filename: "{app}\更新简中官方译名.exe"; WorkingDir: "{app}"; Description: "立即联网更新简体中文官方译名补丁（后续也可在萌卡目录双击重新运行）"; Flags: postinstall nowait skipifsilent
-#endif
-
-#ifexist "..\bin\installer\JP_Pics_Updater.exe"
-Source: "..\bin\installer\JP_Pics_Updater.exe"; DestDir: "{app}"; DestName: "更新日文卡图.exe"; Flags: ignoreversion
 #endif
 
 [Code]
