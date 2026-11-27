@@ -1110,11 +1110,30 @@ void Game::DrawMisc() {
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
 		DrawShadowText(numFont, text, Resize(pt.X - 45, pt.Y - 10, pt.X + 45, pt.Y + 12), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, true, 0);
 	};
-	auto DrawScaleText = [&](const irr::video::S3DVertex* zone, const wchar_t* text) {
+	auto DrawScaleText = [&](const irr::video::S3DVertex* zone, const wchar_t* text, bool isRight) {
+		if(!text || !text[0])
+			return;
 		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, 0.05f));
-		DrawShadowText(adFont, text, Resize(pt.X - 18, pt.Y - 10, pt.X + 18, pt.Y + 10), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, true, 0);
+		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
+		irr::s32 sx = center.UpperLeftCorner.X;
+		irr::s32 sy = center.UpperLeftCorner.Y;
+		auto dim = numFont->getDimension(text);
+		irr::s32 padX = std::max<irr::s32>(6, static_cast<irr::s32>(dim.Height * 0.35f));
+		irr::s32 padY = std::max<irr::s32>(3, static_cast<irr::s32>(dim.Height * 0.16f));
+		irr::s32 boxH = static_cast<irr::s32>(dim.Height) + padY * 2;
+		irr::s32 boxW = std::max<irr::s32>(boxH, static_cast<irr::s32>(dim.Width) + padX * 2);
+		irr::core::recti box(sx - boxW / 2, sy - boxH / 2, sx + boxW / 2, sy + boxH / 2);
+		irr::s32 bw = std::max<irr::s32>(2, boxH / 16);
+		irr::core::recti shadow(box.UpperLeftCorner.X, box.UpperLeftCorner.Y + 2, box.LowerRightCorner.X, box.LowerRightCorner.Y + 2);
+		irr::core::recti inner(box.UpperLeftCorner.X + bw, box.UpperLeftCorner.Y + bw, box.LowerRightCorner.X - bw, box.LowerRightCorner.Y - bw);
+		irr::video::SColor borderCol = isRight ? irr::video::SColor(245, 248, 113, 113) : irr::video::SColor(245, 56, 189, 248);
+		irr::video::SColor fillCol = isRight ? irr::video::SColor(225, 56, 16, 26) : irr::video::SColor(225, 12, 32, 58);
+		driver->draw2DRectangle(irr::video::SColor(130, 0, 0, 0), shadow);
+		driver->draw2DRectangle(borderCol, box);
+		driver->draw2DRectangle(fillCol, inner);
+		DrawShadowText(numFont, text, box, Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, true, 0);
 	};
 
 	ClientCard* pcard;
@@ -1147,29 +1166,29 @@ void Game::DrawMisc() {
 	if(dInfo.duel_rule < 4) {
 		pcard = dField.szone[0][6];
 		if(pcard)
-			DrawScaleText(matManager.vFieldSzone[0][6][rule], pcard->lscstring);
+			DrawScaleText(matManager.vFieldSzone[0][6][rule], pcard->lscstring, false);
 		pcard = dField.szone[0][7];
 		if(pcard)
-			DrawScaleText(matManager.vFieldSzone[0][7][rule], pcard->rscstring);
+			DrawScaleText(matManager.vFieldSzone[0][7][rule], pcard->rscstring, true);
 		pcard = dField.szone[1][6];
 		if(pcard)
-			DrawScaleText(matManager.vFieldSzone[1][6][rule], pcard->lscstring);
+			DrawScaleText(matManager.vFieldSzone[1][6][rule], pcard->lscstring, false);
 		pcard = dField.szone[1][7];
 		if(pcard)
-			DrawScaleText(matManager.vFieldSzone[1][7][rule], pcard->rscstring);
+			DrawScaleText(matManager.vFieldSzone[1][7][rule], pcard->rscstring, true);
 	} else {
 		pcard = dField.szone[0][0];
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
-			DrawScaleText(matManager.vFieldSzone[0][0][rule], pcard->lscstring);
+			DrawScaleText(matManager.vFieldSzone[0][0][rule], pcard->lscstring, false);
 		pcard = dField.szone[0][4];
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
-			DrawScaleText(matManager.vFieldSzone[0][4][rule], pcard->rscstring);
+			DrawScaleText(matManager.vFieldSzone[0][4][rule], pcard->rscstring, true);
 		pcard = dField.szone[1][0];
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
-			DrawScaleText(matManager.vFieldSzone[1][0][rule], pcard->lscstring);
+			DrawScaleText(matManager.vFieldSzone[1][0][rule], pcard->lscstring, false);
 		pcard = dField.szone[1][4];
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
-			DrawScaleText(matManager.vFieldSzone[1][4][rule], pcard->rscstring);
+			DrawScaleText(matManager.vFieldSzone[1][4][rule], pcard->rscstring, true);
 	}
 	for(int p = 0; p < 2; ++p) {
 		if(dField.extra[p].size()) {
