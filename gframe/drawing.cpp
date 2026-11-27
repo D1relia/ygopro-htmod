@@ -128,29 +128,13 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 	const irr::f32 xScale = sz.Width / static_cast<irr::f32>(GAME_WINDOW_WIDTH);
 	const irr::f32 yScale = sz.Height / static_cast<irr::f32>(GAME_WINDOW_HEIGHT);
 	const irr::f32 pixelScale = (xScale < yScale) ? xScale : yScale;
-	constexpr irr::f32 kSelectionLineHalfThicknessScale = 0.2f;
+	constexpr irr::f32 kSelectionLineHalfThicknessScale = 0.2f; // screen-pixel scaling factor for selection outline thickness
 	const irr::f32 halfThick = matManager.mOutLine.Thickness * pixelScale * kSelectionLineHalfThicknessScale;
 	if(halfThick <= 0.0f)
 		return;
 	irr::core::matrix4 invPv;
 	if(!pv.getInverse(invPv))
 		return;
-
-	// 现代 UI 下自动将旧版纯 RGB 荧光色映射为 HTmod 统一色板
-	if(gameConf.modern_ui) {
-		const irr::u32 rgb = color.color & 0x00ffffffu;
-		if(rgb == 0x000000ffu)
-			color = stipple ? irr::video::SColor(255, 56, 189, 248) : irr::video::SColor(255, 224, 242, 254); // 选位：冰蓝 / 选中青白
-		else if(rgb == 0x00ffff00u)
-			color = stipple ? irr::video::SColor(255, 251, 191, 36) : irr::video::SColor(255, 254, 240, 138); // 可发动/连锁：暖琥珀金
-		else if(rgb == 0x0000ffffu)
-			color = stipple ? irr::video::SColor(255, 56, 189, 248) : irr::video::SColor(255, 224, 242, 254); // 选对象/素材：清透冰蓝
-		else if(rgb == 0x00ff0000u)
-			color = irr::video::SColor(255, 251, 113, 133); // 红色提示：珊瑚红
-		else if(rgb == 0x0000ff00u)
-			color = irr::video::SColor(255, 52, 211, 153);  // 绿色提示：翡翠青
-	}
-
 	struct ProjectedPoint {
 		irr::core::vector2df screen;
 		irr::f32 ndcZ;
@@ -173,6 +157,7 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 		const irr::f32 invW = 1.0f / point[3];
 		return irr::core::vector3df(point[0] * invW, point[1] * invW, point[2] * invW);
 	};
+	// must be static due to a VS2019 compiler bug
 	static constexpr size_t THICK_LINE_VERTICES_PER_SEGMENT = 8;
 	static constexpr size_t THICK_LINE_INDICES_PER_SEGMENT = 30;
 	const auto lerpProjected = [](const ProjectedPoint& start, const ProjectedPoint& end, irr::f32 t) {
@@ -182,8 +167,6 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 		return result;
 	};
 	const auto buildThickLine = [&](const ProjectedPoint& ps, const ProjectedPoint& pe,
-	                                irr::f32 curHalfThick, irr::f32 curFeather, irr::video::SColor curColor,
-	                                irr::f32 endExtend,
 	                                irr::video::S3DVertex* outVertices, irr::u16* outIndices, irr::u16 base) {
 		const auto screenDirection = pe.screen - ps.screen;
 		const irr::f32 screenLenSq = screenDirection.getLengthSQ();
@@ -191,10 +174,10 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 		const irr::f32 invScreenLen = 1.0f / std::sqrt(screenLenSq);
 		const irr::core::vector2df dir = screenDirection * invScreenLen;
 		const irr::core::vector2df perp(-dir.Y, dir.X);
-		const auto innerPerp = perp * curHalfThick;
-		const auto outerPerp = perp * (curHalfThick + curFeather);
-		const auto endCap = dir * endExtend;
-		const auto endFeather = dir * (endExtend + curFeather);
+		const irr::f32 feather = halfThick * 2.0f;
+		const auto innerPerp = perp * halfThick;
+		const auto outerPerp = perp * (halfThick + feather);
+		const auto endFeather = dir * feather;
 		static const irr::u16 idx[30] = {
 			0, 1, 3, 0, 3, 2,
 			4, 5, 0, 0, 5, 1,
@@ -203,12 +186,12 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			7, 4, 2, 2, 4, 0
 		};
 		const irr::core::vector3df normal(0.0f, 0.0f, -1.0f);
-		irr::video::SColor transparent = curColor;
+		irr::video::SColor transparent = color;
 		transparent.setAlpha(0);
-		outVertices[0] = irr::video::S3DVertex(unprojectScreen(ps.screen - endCap + innerPerp, ps.ndcZ), normal, curColor, irr::core::vector2df());
-		outVertices[1] = irr::video::S3DVertex(unprojectScreen(pe.screen + endCap + innerPerp, pe.ndcZ), normal, curColor, irr::core::vector2df());
-		outVertices[2] = irr::video::S3DVertex(unprojectScreen(ps.screen - endCap - innerPerp, ps.ndcZ), normal, curColor, irr::core::vector2df());
-		outVertices[3] = irr::video::S3DVertex(unprojectScreen(pe.screen + endCap - innerPerp, pe.ndcZ), normal, curColor, irr::core::vector2df());
+		outVertices[0] = irr::video::S3DVertex(unprojectScreen(ps.screen + innerPerp, ps.ndcZ), normal, color, irr::core::vector2df());
+		outVertices[1] = irr::video::S3DVertex(unprojectScreen(pe.screen + innerPerp, pe.ndcZ), normal, color, irr::core::vector2df());
+		outVertices[2] = irr::video::S3DVertex(unprojectScreen(ps.screen - innerPerp, ps.ndcZ), normal, color, irr::core::vector2df());
+		outVertices[3] = irr::video::S3DVertex(unprojectScreen(pe.screen - innerPerp, pe.ndcZ), normal, color, irr::core::vector2df());
 		outVertices[4] = irr::video::S3DVertex(unprojectScreen(ps.screen - endFeather + outerPerp, ps.ndcZ), normal, transparent, irr::core::vector2df());
 		outVertices[5] = irr::video::S3DVertex(unprojectScreen(pe.screen + endFeather + outerPerp, pe.ndcZ), normal, transparent, irr::core::vector2df());
 		outVertices[6] = irr::video::S3DVertex(unprojectScreen(pe.screen + endFeather - outerPerp, pe.ndcZ), normal, transparent, irr::core::vector2df());
@@ -219,8 +202,7 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 	};
 	driver->setMaterial(matManager.mOutLine);
 	driver->setTransform(irr::video::ETS_WORLD, irr::core::matrix4());
-
-	const auto drawFixedSegmentsStyled = [&](const auto& getSegment, irr::f32 curHalfThick, irr::f32 curFeather, irr::video::SColor curColor, irr::f32 endExtend) {
+	const auto drawFixedSegments = [&](const auto& getSegment) {
 		irr::video::S3DVertex vertices[4 * THICK_LINE_VERTICES_PER_SEGMENT];
 		irr::u16 indices[4 * THICK_LINE_INDICES_PER_SEGMENT];
 		size_t vertexCount = 0;
@@ -229,7 +211,7 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			ProjectedPoint ps, pe;
 			if(!getSegment(i, ps, pe))
 				continue;
-			if(buildThickLine(ps, pe, curHalfThick, curFeather, curColor, endExtend, vertices + vertexCount, indices + indexCount, static_cast<irr::u16>(vertexCount))) {
+			if(buildThickLine(ps, pe, vertices + vertexCount, indices + indexCount, static_cast<irr::u16>(vertexCount))) {
 				vertexCount += THICK_LINE_VERTICES_PER_SEGMENT;
 				indexCount += THICK_LINE_INDICES_PER_SEGMENT;
 			}
@@ -238,35 +220,6 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			driver->drawVertexPrimitiveList(vertices, static_cast<irr::u32>(vertexCount),
 			    indices, static_cast<irr::u32>(indexCount / 3),
 			    irr::video::EVT_STANDARD, irr::scene::EPT_TRIANGLES);
-	};
-
-	if(gameConf.modern_ui) {
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
-		const auto fullEdge = [&](int i, ProjectedPoint& ps, ProjectedPoint& pe) {
-			return projectPoint(wp[edgeStart[i]], ps) && projectPoint(wp[edgeEnd[i]], pe);
-		};
-		// Pass 1: 柔和外发光层
-		irr::video::SColor haloCol = color;
-		haloCol.setAlpha(stipple ? static_cast<irr::u32>(62.0f + 58.0f * breath) : 125u);
-		const irr::f32 haloHalf = halfThick * (stipple ? (1.45f + 0.45f * breath) : 1.75f);
-		drawFixedSegmentsStyled(fullEdge, haloHalf, haloHalf * 2.2f, haloCol, haloHalf * 0.5f);
-
-		// Pass 2: 清晰呼吸核心实线框
-		const irr::f32 boost = stipple ? (0.12f * breath) : 0.22f;
-		irr::video::SColor coreCol(
-			stipple ? static_cast<irr::u32>(188.0f + 67.0f * breath) : 255u,
-			static_cast<irr::u32>(std::min(255.0f, color.getRed() + (255.0f - color.getRed()) * boost)),
-			static_cast<irr::u32>(std::min(255.0f, color.getGreen() + (255.0f - color.getGreen()) * boost)),
-			static_cast<irr::u32>(std::min(255.0f, color.getBlue() + (255.0f - color.getBlue()) * boost)));
-		const irr::f32 coreHalf = halfThick * (stipple ? (0.85f + 0.18f * breath) : 1.10f);
-		drawFixedSegmentsStyled(fullEdge, coreHalf, coreHalf * 1.15f, coreCol, coreHalf);
-		driver->setTransform(irr::video::ETS_WORLD, oldWorld);
-		return;
-	}
-
-	const auto drawFixedSegments = [&](const auto& getSegment) {
-		drawFixedSegmentsStyled(getSegment, halfThick, halfThick * 2.0f, color, 0.0f);
 	};
 	if(!stipple) {
 		drawFixedSegments([&](int i, ProjectedPoint& ps, ProjectedPoint& pe) {
@@ -323,11 +276,13 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			const size_t oldIndexCount = indices.size();
 			vertices.resize(oldVertexCount + THICK_LINE_VERTICES_PER_SEGMENT);
 			indices.resize(oldIndexCount + THICK_LINE_INDICES_PER_SEGMENT);
-			if(!buildThickLine(ps, pe, halfThick, halfThick * 2.0f, color, 0.0f, vertices.data() + oldVertexCount, indices.data() + oldIndexCount, base)) {
+			if(!buildThickLine(ps, pe, vertices.data() + oldVertexCount, indices.data() + oldIndexCount, base)) {
 				vertices.resize(oldVertexCount);
 				indices.resize(oldIndexCount);
 			}
 		};
+		// Project edge endpoints to screen space to get pixel length for pattern tiling.
+		// (1 pattern bit = 1 screen pixel, matching the original GL stipple behaviour.)
 		irr::f32 patternCursor = 0.0f;
 		for(int i = 0; i < 4; ++i) {
 			const auto& edge = projectedEdges[i];
@@ -364,30 +319,6 @@ void Game::DrawSelectionLine(irr::gui::IGUIElement* element, int width, irr::vid
 	irr::s32 x2 = pos.LowerRightCorner.X;
 	irr::s32 y1 = pos.UpperLeftCorner.Y;
 	irr::s32 y2 = pos.LowerRightCorner.Y;
-	if(gameConf.modern_ui) {
-		const irr::u32 rgb = color.color & 0x00ffffffu;
-		if(rgb == 0x00ffff00u)
-			color = irr::video::SColor(255, 251, 191, 36);
-		else if(rgb == 0x000000ffu || rgb == 0x0000ffffu)
-			color = irr::video::SColor(255, 56, 189, 248);
-		else if(rgb == 0x00ff0000u)
-			color = irr::video::SColor(255, 251, 113, 133);
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
-		irr::s32 bw = std::max<irr::s32>(2, width);
-		irr::s32 gw = bw + 2;
-		irr::video::SColor glowCol(static_cast<irr::u32>(55.0f + 50.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
-		irr::video::SColor coreCol(static_cast<irr::u32>(195.0f + 60.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
-		auto drawFrame = [&](irr::s32 pad, irr::video::SColor c) {
-			driver->draw2DRectangle(c, irr::core::recti(x1 - pad, y1 - pad, x2 + pad, y1));
-			driver->draw2DRectangle(c, irr::core::recti(x1 - pad, y2, x2 + pad, y2 + pad));
-			driver->draw2DRectangle(c, irr::core::recti(x1 - pad, y1, x1, y2));
-			driver->draw2DRectangle(c, irr::core::recti(x2, y1, x2 + pad, y2));
-		};
-		drawFrame(gw, glowCol);
-		drawFrame(bw, coreCol);
-		return;
-	}
 	irr::s32 w = pos.getWidth();
 	irr::s32 h = pos.getHeight();
 	if(linePattern < 15) {
@@ -464,53 +395,25 @@ void Game::DrawBackGround() {
 	//select field
 	driver->setMaterial(matManager.mOutLine);
 	if(dInfo.curMsg == MSG_SELECT_PLACE || dInfo.curMsg == MSG_SELECT_DISFIELD || dInfo.curMsg == MSG_HINT) {
-		const bool isDisfield = (dInfo.curMsg == MSG_SELECT_DISFIELD);
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
-		const irr::video::SColor lineBase = gameConf.modern_ui
-			? (isDisfield ? irr::video::SColor(255, 251, 113, 133) : irr::video::SColor(255, 56, 189, 248))
-			: irr::video::SColor(0xff0000ff);
-		auto drawZoneSelect = [&](irr::video::S3DVertex* zoneVerts, bool isSelected) {
-			if(gameConf.modern_ui) {
-				irr::video::S3DVertex fillVerts[4];
-				irr::u32 fillAlpha = isSelected ? 96u : static_cast<irr::u32>(32.0f + 36.0f * breath);
-				irr::video::SColor fillCol = isDisfield
-					? irr::video::SColor(fillAlpha, 251, 113, 133)
-					: (isSelected ? irr::video::SColor(fillAlpha, 186, 230, 253) : irr::video::SColor(fillAlpha, 56, 189, 248));
-				for(int k = 0; k < 4; ++k) {
-					fillVerts[k] = zoneVerts[k];
-					fillVerts[k].Pos.Z += 0.005f;
-					fillVerts[k].Color = fillCol;
-				}
-				irr::video::SMaterial fillMat;
-				fillMat.Lighting = false;
-				fillMat.ZWriteEnable = irr::video::EZW_OFF;
-				fillMat.MaterialType = irr::video::EMT_TRANSPARENT_VERTEX_ALPHA;
-				driver->setMaterial(fillMat);
-				driver->drawVertexPrimitiveList(fillVerts, 4, matManager.iRectangle, 2);
-				driver->setMaterial(matManager.mOutLine);
-			}
-			DrawSelectionLine(zoneVerts, !isSelected, isSelected && gameConf.modern_ui ? irr::video::SColor(255, 224, 242, 254) : lineBase);
-		};
 		unsigned int filter = 0x1;
 		for (int i = 0; i < 7; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				drawZoneSelect(matManager.vFieldMzone[0][i], (dField.selected_field & filter) != 0);
+				DrawSelectionLine(matManager.vFieldMzone[0][i], !(dField.selected_field & filter), 0xff0000ff);
 		}
 		filter = 0x100;
 		for (int i = 0; i < 8; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				drawZoneSelect(matManager.vFieldSzone[0][i][rule], (dField.selected_field & filter) != 0);
+				DrawSelectionLine(matManager.vFieldSzone[0][i][rule], !(dField.selected_field & filter), 0xff0000ff);
 		}
 		filter = 0x10000;
 		for (int i = 0; i < 7; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				drawZoneSelect(matManager.vFieldMzone[1][i], (dField.selected_field & filter) != 0);
+				DrawSelectionLine(matManager.vFieldMzone[1][i], !(dField.selected_field & filter), 0xff0000ff);
 		}
 		filter = 0x1000000;
 		for (int i = 0; i < 8; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				drawZoneSelect(matManager.vFieldSzone[1][i][rule], (dField.selected_field & filter) != 0);
+				DrawSelectionLine(matManager.vFieldSzone[1][i][rule], !(dField.selected_field & filter), 0xff0000ff);
 		}
 	}
 	//disabled field
@@ -885,48 +788,19 @@ void Game::DrawMisc() {
 		driver->drawVertexPrimitiveList(matManager.vActivate, 4, matManager.iRectangle, 2);
 	}
 	if(dField.chains.size() > 1 || gameConf.draw_single_chain) {
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
 		for(size_t i = 0; i < dField.chains.size(); ++i) {
 			if(dField.chains[i].solved)
 				break;
-			const bool isSelf = (dField.chains[i].controler == 0);
-			const bool isTopChain = (i + 1 == dField.chains.size() || dField.chains[i + 1].solved);
-			const irr::f32 pulse = 0.5f + 0.5f * std::sin(tSec * 5.0f - static_cast<irr::f32>(i) * 0.65f);
-			const irr::f32 chainScale = gameConf.modern_ui
-				? (isTopChain ? (1.03f + 0.08f * pulse) : (0.96f + 0.04f * pulse))
-				: 1.0f;
-			const irr::f32 numScale = gameConf.modern_ui
-				? (isTopChain ? (0.63f + 0.05f * pulse) : (0.58f + 0.02f * pulse))
-				: 0.6f;
-
-			// 方案 B：己方冰蓝 / 对方珊瑚红，栈顶结算环提亮一档
-			const irr::video::SColor chainCol = gameConf.modern_ui
-				? (isSelf
-					? (isTopChain ? irr::video::SColor(255, 125, 211, 252) : irr::video::SColor(255, 56, 189, 248))
-					: (isTopChain ? irr::video::SColor(255, 253, 164, 175) : irr::video::SColor(255, 251, 113, 133)))
-				: irr::video::SColor(0xffffff00);
-			const irr::video::SColor numCol = gameConf.modern_ui
-				? (isSelf ? irr::video::SColor(255, 240, 249, 255) : irr::video::SColor(255, 255, 241, 242))
-				: irr::video::SColor(0xffffff00);
-
-			irr::core::matrix4 rotMat, scaleMat;
-			rotMat.setRotationRadians(act_rot);
-			scaleMat.setScale(irr::core::vector3df(chainScale, chainScale, 1.0f));
-			ic = rotMat * scaleMat;
-			ic.setTranslation(dField.chains[i].chain_pos);
 			matManager.mTRTexture.setTexture(0, imageManager.tChain);
-			matManager.mTRTexture.AmbientColor = chainCol;
+			matManager.mTRTexture.AmbientColor = 0xffffff00;
+			ic.setRotationRadians(act_rot);
+			ic.setTranslation(dField.chains[i].chain_pos);
 			driver->setMaterial(matManager.mTRTexture);
 			driver->setTransform(irr::video::ETS_WORLD, ic);
 			driver->drawVertexPrimitiveList(matManager.vSymbol, 4, matManager.iRectangle, 2);
-
-			irr::core::vector3df numPos = dField.chains[i].chain_pos;
-			numPos.Z += 0.01f;
-			it.makeIdentity();
-			it.setScale(irr::core::vector3df(numScale, numScale, 1.0f));
-			it.setTranslation(numPos);
+			it.setScale(0.6f);
+			it.setTranslation(dField.chains[i].chain_pos);
 			matManager.mTRTexture.setTexture(0, imageManager.tNumber);
-			matManager.mTRTexture.AmbientColor = numCol;
 			matManager.vChainNum[0].TCoords = irr::core::vector2df(0.19375f * (i % 5), 0.2421875f * (i / 5));
 			matManager.vChainNum[1].TCoords = irr::core::vector2df(0.19375f * (i % 5 + 1), 0.2421875f * (i / 5));
 			matManager.vChainNum[2].TCoords = irr::core::vector2df(0.19375f * (i % 5), 0.2421875f * (i / 5 + 1));
@@ -935,7 +809,6 @@ void Game::DrawMisc() {
 			driver->setTransform(irr::video::ETS_WORLD, it);
 			driver->drawVertexPrimitiveList(matManager.vChainNum, 4, matManager.iRectangle, 2);
 		}
-		matManager.mTRTexture.AmbientColor = 0xffffffff;
 	}
 	if(dField.cant_check_grave) {
 		matManager.mTexture.setTexture(0, imageManager.tNegated);
@@ -1290,13 +1163,12 @@ void Game::DrawMisc() {
 		irr::f32 vy = (0.5f - v[1] * invW * 0.5f) * 640.0f;
 		return irr::core::vector2di((int)(vx + 0.5f), (int)(vy + 0.5f));
 	};
-	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text, int yOffset = 0) {
+	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text) {
 		if(text.empty())
 			return;
 		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
-		pt.Y += yOffset;
 		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
 		irr::s32 sx = center.UpperLeftCorner.X;
 		irr::s32 sy = center.UpperLeftCorner.Y;
@@ -1413,32 +1285,20 @@ void Game::DrawMisc() {
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
 			DrawScaleText(matManager.vFieldSzone[1][4][rule], pcard->rscstring, true);
 	}
-	auto hasChainAt = [&](int player, int loc) -> bool {
-		if(!(dField.chains.size() > 1 || gameConf.draw_single_chain))
-			return false;
-		for(size_t i = 0; i < dField.chains.size(); ++i) {
-			if(dField.chains[i].solved)
-				break;
-			if(dField.chains[i].controler == player && dField.chains[i].location == loc)
-				return true;
-		}
-		return false;
-	};
 	for(int p = 0; p < 2; ++p) {
-		const int chainShift = (p == 0) ? 26 : -24;
 		if(dField.extra[p].size()) {
 			wchar_t extraStr[32];
 			myswprintf(extraStr, L"%d (%d)", (int)dField.extra[p].size(), dField.extra_p_count[p]);
-			DrawZoneText(matManager.vFieldExtra[p], dField.extra[p].size() * 0.01f + 0.03f, extraStr, hasChainAt(p, LOCATION_EXTRA) ? chainShift : 0);
+			DrawZoneText(matManager.vFieldExtra[p], dField.extra[p].size() * 0.01f + 0.03f, extraStr);
 		}
 		if(dField.deck[p].size()) {
-			DrawZoneText(matManager.vFieldDeck[p], dField.deck[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.deck[p].size()), hasChainAt(p, LOCATION_DECK) ? chainShift : 0);
+			DrawZoneText(matManager.vFieldDeck[p], dField.deck[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.deck[p].size()));
 		}
 		if(dField.grave[p].size()) {
-			DrawZoneText(matManager.vFieldGrave[p][rule], dField.grave[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.grave[p].size()), hasChainAt(p, LOCATION_GRAVE) ? chainShift : 0);
+			DrawZoneText(matManager.vFieldGrave[p][rule], dField.grave[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.grave[p].size()));
 		}
 		if(dField.remove[p].size()) {
-			DrawZoneText(matManager.vFieldRemove[p][rule], dField.remove[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.remove[p].size()), hasChainAt(p, LOCATION_REMOVED) ? chainShift : 0);
+			DrawZoneText(matManager.vFieldRemove[p][rule], dField.remove[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.remove[p].size()));
 		}
 	}
 }
