@@ -1116,24 +1116,94 @@ void Game::DrawMisc() {
 		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, 0.05f));
+		// 己方下移、对方上移，避开卡图主体
+		pt.Y += (pt.Y > 320) ? 14 : -12;
 		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
 		irr::s32 sx = center.UpperLeftCorner.X;
 		irr::s32 sy = center.UpperLeftCorner.Y;
+
+		auto drawGlassPill = [&](const irr::core::recti& rc, irr::s32 rad, irr::video::SColor topCol, irr::video::SColor botCol, irr::video::SColor bdCol, bool drawBorder) {
+			irr::s32 w = rc.getWidth();
+			irr::s32 h = rc.getHeight();
+			if(w <= 0 || h <= 0)
+				return;
+			rad = std::min(rad, std::min(w / 2, h / 2));
+			auto rowInset = [&](irr::s32 row) -> irr::s32 {
+				if(rad <= 0)
+					return 0;
+				irr::f32 dy = 0.0f;
+				if(row < rad)
+					dy = static_cast<irr::f32>(rad - row) - 0.5f;
+				else if(row >= h - rad)
+					dy = static_cast<irr::f32>(row - (h - rad) + 1) - 0.5f;
+				if(dy <= 0.0f)
+					return 0;
+				irr::f32 r = static_cast<irr::f32>(rad);
+				irr::f32 dx = irr::core::squareroot(std::max(0.0f, r * r - dy * dy));
+				return static_cast<irr::s32>(r - dx + 0.5f);
+			};
+			for(irr::s32 y = 0; y < h; ++y) {
+				irr::s32 inset = rowInset(y);
+				irr::s32 x1 = rc.UpperLeftCorner.X + inset;
+				irr::s32 x2 = rc.LowerRightCorner.X - inset;
+				if(x2 <= x1)
+					continue;
+				irr::s32 py = rc.UpperLeftCorner.Y + y;
+				irr::f32 t = (h > 1) ? static_cast<irr::f32>(y) / static_cast<irr::f32>(h - 1) : 0.0f;
+				irr::video::SColor rowCol(
+					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getAlpha()) + (static_cast<irr::s32>(botCol.getAlpha()) - static_cast<irr::s32>(topCol.getAlpha())) * t),
+					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getRed()) + (static_cast<irr::s32>(botCol.getRed()) - static_cast<irr::s32>(topCol.getRed())) * t),
+					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getGreen()) + (static_cast<irr::s32>(botCol.getGreen()) - static_cast<irr::s32>(topCol.getGreen())) * t),
+					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getBlue()) + (static_cast<irr::s32>(botCol.getBlue()) - static_cast<irr::s32>(topCol.getBlue())) * t));
+				driver->draw2DRectangle(rowCol, irr::core::recti(x1, py, x2, py + 1));
+				if(drawBorder && bdCol.getAlpha() > 0) {
+					if(y == 0 || y == h - 1) {
+						driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, x2, py + 1));
+					} else {
+						irr::s32 refY = (y < rad) ? (y - 1) : (y >= h - rad ? (y + 1) : y);
+						irr::s32 edgeW = std::max<irr::s32>(1, rowInset(refY) - inset);
+						driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, std::min(x2, x1 + edgeW), py + 1));
+						driver->draw2DRectangle(bdCol, irr::core::recti(std::max(x1, x2 - edgeW), py, x2, py + 1));
+					}
+				}
+			}
+		};
+
 		auto dim = numFont->getDimension(text);
-		irr::s32 padX = std::max<irr::s32>(6, static_cast<irr::s32>(dim.Height * 0.35f));
-		irr::s32 padY = std::max<irr::s32>(3, static_cast<irr::s32>(dim.Height * 0.16f));
+		irr::s32 padY = std::max<irr::s32>(2, static_cast<irr::s32>(dim.Height * 0.14f));
 		irr::s32 boxH = static_cast<irr::s32>(dim.Height) + padY * 2;
-		irr::s32 boxW = std::max<irr::s32>(boxH, static_cast<irr::s32>(dim.Width) + padX * 2);
+		irr::s32 barW = std::max<irr::s32>(3, boxH / 9);
+		irr::s32 padX = std::max<irr::s32>(8, static_cast<irr::s32>(dim.Height * 0.40f));
+		irr::s32 boxW = std::max<irr::s32>(static_cast<irr::s32>(boxH * 1.45f), static_cast<irr::s32>(dim.Width) + padX * 2 + barW + 4);
+		irr::s32 rad = std::max<irr::s32>(5, boxH / 3);
 		irr::core::recti box(sx - boxW / 2, sy - boxH / 2, sx + boxW / 2, sy + boxH / 2);
-		irr::s32 bw = std::max<irr::s32>(2, boxH / 16);
-		irr::core::recti shadow(box.UpperLeftCorner.X, box.UpperLeftCorner.Y + 2, box.LowerRightCorner.X, box.LowerRightCorner.Y + 2);
-		irr::core::recti inner(box.UpperLeftCorner.X + bw, box.UpperLeftCorner.Y + bw, box.LowerRightCorner.X - bw, box.LowerRightCorner.Y - bw);
-		irr::video::SColor borderCol = isRight ? irr::video::SColor(245, 248, 113, 113) : irr::video::SColor(245, 56, 189, 248);
-		irr::video::SColor fillCol = isRight ? irr::video::SColor(225, 56, 16, 26) : irr::video::SColor(225, 12, 32, 58);
-		driver->draw2DRectangle(irr::video::SColor(130, 0, 0, 0), shadow);
-		driver->draw2DRectangle(borderCol, box);
-		driver->draw2DRectangle(fillCol, inner);
-		DrawShadowText(numFont, text, box, Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, true, 0);
+
+		irr::video::SColor accentCol = isRight ? irr::video::SColor(255, 248, 113, 113) : irr::video::SColor(255, 56, 189, 248);
+		irr::video::SColor borderCol = isRight ? irr::video::SColor(215, 248, 113, 113) : irr::video::SColor(215, 56, 189, 248);
+		irr::video::SColor glassTop  = isRight ? irr::video::SColor(225, 40, 26, 40) : irr::video::SColor(225, 22, 36, 56);
+		irr::video::SColor glassBot  = irr::video::SColor(235, 14, 20, 34);
+
+		// 柔和投影 + 深色玻璃圆角胶囊
+		irr::core::recti shadow(box.UpperLeftCorner.X - 1, box.UpperLeftCorner.Y + 2, box.LowerRightCorner.X + 1, box.LowerRightCorner.Y + 3);
+		drawGlassPill(shadow, rad + 1, irr::video::SColor(105, 0, 0, 0), irr::video::SColor(105, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		drawGlassPill(box, rad, glassTop, glassBot, borderCol, true);
+
+		// 左刻度左侧光条 / 右刻度右侧光条
+		irr::s32 barPadV = std::max<irr::s32>(4, boxH / 4);
+		irr::s32 barMargin = std::max<irr::s32>(4, barW + 1);
+		irr::s32 barX = isRight ? (box.LowerRightCorner.X - barMargin - barW) : (box.UpperLeftCorner.X + barMargin);
+		irr::core::recti barRect(barX, box.UpperLeftCorner.Y + barPadV, barX + barW, box.LowerRightCorner.Y - barPadV);
+		drawGlassPill(barRect, barW / 2, accentCol, accentCol, accentCol, false);
+
+		// 文字避开光条做视觉居中
+		irr::s32 textShift = (barW + 2) / 2;
+		irr::core::recti textRect(
+			box.UpperLeftCorner.X + (isRight ? 0 : textShift),
+			box.UpperLeftCorner.Y,
+			box.LowerRightCorner.X - (isRight ? textShift : 0),
+			box.LowerRightCorner.Y);
+		irr::u32 textCol = isRight ? 0xffffe4e6 : 0xffe0f2fe;
+		DrawShadowText(numFont, text, textRect, Resize(1, 1, 1, 1), textCol, 0xff000000, true, true, 0);
 	};
 
 	ClientCard* pcard;
