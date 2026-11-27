@@ -2037,6 +2037,10 @@ bool ClientField::OnCommonEvent(const irr::SEvent& event) {
 				mainGame->tabSystem->setRelativePosition(irr::core::recti(pos.UpperLeftCorner.X, baseY - mainGame->scrTabSystem->getPos(), pos.LowerRightCorner.X, pos.LowerRightCorner.Y));
 				return true;
 			}
+			case Game::SCROLL_FIELD_ALPHA: {
+				mainGame->gameConf.field_spell_alpha = mainGame->scrFieldAlpha->getPos();
+				return true;
+			}
 			}
 			break;
 		}
