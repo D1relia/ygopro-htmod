@@ -61,6 +61,18 @@ static void DrawGlassPill(irr::video::IVideoDriver* driver, const irr::core::rec
 	}
 }
 
+static irr::f32 GetModernBreath(irr::IrrlichtDevice* dev, irr::f32 speed = 1.8f, irr::f32 phase = 0.0f) {
+	static bool s_inited = false;
+	static irr::u32 s_startMs = 0;
+	const irr::u32 nowMs = dev ? dev->getTimer()->getRealTime() : 0u;
+	if(!s_inited) {
+		s_startMs = nowMs;
+		s_inited = true;
+	}
+	const irr::f32 tSec = static_cast<irr::f32>(nowMs - s_startMs) * 0.001f;
+	return 0.5f + 0.5f * std::sin(tSec * speed + phase);
+}
+
 void Game::Draw2DImageQuad(irr::video::IVideoDriver* driver, irr::video::ITexture* texture,
 						   const irr::core::recti& sourceRect, const irr::core::vector2di corners[4],
 						   bool useAlphaChannel, irr::video::SColor color) {
@@ -241,26 +253,25 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 	};
 
 	if(gameConf.modern_ui) {
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
+		const irr::f32 breath = GetModernBreath(device, 1.8f);
 		const auto fullEdge = [&](int i, ProjectedPoint& ps, ProjectedPoint& pe) {
 			return projectPoint(wp[edgeStart[i]], ps) && projectPoint(wp[edgeEnd[i]], pe);
 		};
-		// Pass 1: 柔和外发光层
+		// Pass 1: 克制的柔和外光晕缓慢呼吸（约 3.5 秒一周期）
 		irr::video::SColor haloCol = color;
-		haloCol.setAlpha(stipple ? static_cast<irr::u32>(62.0f + 58.0f * breath) : 125u);
-		const irr::f32 haloHalf = halfThick * (stipple ? (1.45f + 0.45f * breath) : 1.75f);
-		drawFixedSegmentsStyled(fullEdge, haloHalf, haloHalf * 2.2f, haloCol, haloHalf * 0.5f);
+		haloCol.setAlpha(stipple ? static_cast<irr::u32>(46.0f + 42.0f * breath) : 110u);
+		const irr::f32 haloHalf = halfThick * (stipple ? (1.42f + 0.16f * breath) : 1.65f);
+		drawFixedSegmentsStyled(fullEdge, haloHalf, haloHalf * 2.0f, haloCol, haloHalf * 0.5f);
 
-		// Pass 2: 清晰呼吸核心实线框
-		const irr::f32 boost = stipple ? (0.12f * breath) : 0.22f;
+		// Pass 2: 稳定清晰的实线主框（宽度锁定，仅做极轻微明度起伏）
+		const irr::f32 boost = stipple ? (0.06f * breath) : 0.18f;
 		irr::video::SColor coreCol(
-			stipple ? static_cast<irr::u32>(188.0f + 67.0f * breath) : 255u,
+			stipple ? static_cast<irr::u32>(228.0f + 27.0f * breath) : 255u,
 			static_cast<irr::u32>(std::min(255.0f, color.getRed() + (255.0f - color.getRed()) * boost)),
 			static_cast<irr::u32>(std::min(255.0f, color.getGreen() + (255.0f - color.getGreen()) * boost)),
 			static_cast<irr::u32>(std::min(255.0f, color.getBlue() + (255.0f - color.getBlue()) * boost)));
-		const irr::f32 coreHalf = halfThick * (stipple ? (0.85f + 0.18f * breath) : 1.10f);
-		drawFixedSegmentsStyled(fullEdge, coreHalf, coreHalf * 1.15f, coreCol, coreHalf);
+		const irr::f32 coreHalf = halfThick * (stipple ? 0.96f : 1.08f);
+		drawFixedSegmentsStyled(fullEdge, coreHalf, coreHalf * 1.1f, coreCol, coreHalf);
 		driver->setTransform(irr::video::ETS_WORLD, oldWorld);
 		return;
 	}
@@ -372,12 +383,11 @@ void Game::DrawSelectionLine(irr::gui::IGUIElement* element, int width, irr::vid
 			color = irr::video::SColor(255, 56, 189, 248);
 		else if(rgb == 0x00ff0000u)
 			color = irr::video::SColor(255, 251, 113, 133);
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
+		const irr::f32 breath = GetModernBreath(device, 1.8f);
 		irr::s32 bw = std::max<irr::s32>(2, width);
 		irr::s32 gw = bw + 2;
-		irr::video::SColor glowCol(static_cast<irr::u32>(55.0f + 50.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
-		irr::video::SColor coreCol(static_cast<irr::u32>(195.0f + 60.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
+		irr::video::SColor glowCol(static_cast<irr::u32>(42.0f + 36.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
+		irr::video::SColor coreCol(static_cast<irr::u32>(228.0f + 27.0f * breath), color.getRed(), color.getGreen(), color.getBlue());
 		auto drawFrame = [&](irr::s32 pad, irr::video::SColor c) {
 			driver->draw2DRectangle(c, irr::core::recti(x1 - pad, y1 - pad, x2 + pad, y1));
 			driver->draw2DRectangle(c, irr::core::recti(x1 - pad, y2, x2 + pad, y2 + pad));
@@ -465,15 +475,14 @@ void Game::DrawBackGround() {
 	driver->setMaterial(matManager.mOutLine);
 	if(dInfo.curMsg == MSG_SELECT_PLACE || dInfo.curMsg == MSG_SELECT_DISFIELD || dInfo.curMsg == MSG_HINT) {
 		const bool isDisfield = (dInfo.curMsg == MSG_SELECT_DISFIELD);
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
-		const irr::f32 breath = 0.5f + 0.5f * std::sin(tSec * 4.2f);
+		const irr::f32 breath = GetModernBreath(device, 1.8f);
 		const irr::video::SColor lineBase = gameConf.modern_ui
 			? (isDisfield ? irr::video::SColor(255, 251, 113, 133) : irr::video::SColor(255, 56, 189, 248))
 			: irr::video::SColor(0xff0000ff);
 		auto drawZoneSelect = [&](irr::video::S3DVertex* zoneVerts, bool isSelected) {
 			if(gameConf.modern_ui) {
 				irr::video::S3DVertex fillVerts[4];
-				irr::u32 fillAlpha = isSelected ? 96u : static_cast<irr::u32>(32.0f + 36.0f * breath);
+				irr::u32 fillAlpha = isSelected ? 88u : static_cast<irr::u32>(24.0f + 24.0f * breath);
 				irr::video::SColor fillCol = isDisfield
 					? irr::video::SColor(fillAlpha, 251, 113, 133)
 					: (isSelected ? irr::video::SColor(fillAlpha, 186, 230, 253) : irr::video::SColor(fillAlpha, 56, 189, 248));
@@ -885,18 +894,17 @@ void Game::DrawMisc() {
 		driver->drawVertexPrimitiveList(matManager.vActivate, 4, matManager.iRectangle, 2);
 	}
 	if(dField.chains.size() > 1 || gameConf.draw_single_chain) {
-		const irr::f32 tSec = device ? (device->getTimer()->getTime() * 0.001f) : 0.0f;
 		for(size_t i = 0; i < dField.chains.size(); ++i) {
 			if(dField.chains[i].solved)
 				break;
 			const bool isSelf = (dField.chains[i].controler == 0);
 			const bool isTopChain = (i + 1 == dField.chains.size() || dField.chains[i + 1].solved);
-			const irr::f32 pulse = 0.5f + 0.5f * std::sin(tSec * 5.0f - static_cast<irr::f32>(i) * 0.65f);
+			const irr::f32 pulse = GetModernBreath(device, 2.2f, -static_cast<irr::f32>(i) * 0.65f);
 			const irr::f32 chainScale = gameConf.modern_ui
-				? (isTopChain ? (1.03f + 0.08f * pulse) : (0.96f + 0.04f * pulse))
+				? (isTopChain ? (1.02f + 0.04f * pulse) : (0.98f + 0.02f * pulse))
 				: 1.0f;
 			const irr::f32 numScale = gameConf.modern_ui
-				? (isTopChain ? (0.63f + 0.05f * pulse) : (0.58f + 0.02f * pulse))
+				? (isTopChain ? (0.62f + 0.03f * pulse) : (0.59f + 0.01f * pulse))
 				: 0.6f;
 
 			// 方案 B：己方冰蓝 / 对方珊瑚红，栈顶结算环提亮一档
