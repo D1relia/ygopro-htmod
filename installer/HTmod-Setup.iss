@@ -44,21 +44,41 @@ FinishedLabel=YGOPro KoishiPro-HTmod 已成功安装到萌卡目录！%n%n提示
 ConfirmUninstall=确定要卸载 %1 并还原萌卡官方原版 ygopro.exe 吗？
 UninstalledAll=%1 已卸载，萌卡官方原版内核已恢复。
 
-[Files]
-Source: "..\bin\release\x64\YGOPro.exe"; DestDir: "{app}"; DestName: "ygopro.exe"; Flags: ignoreversion
-#ifexist "fonts\MiSans-Medium.ttf"
-Source: "fonts\MiSans-Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
-#endif
+[Types]
+Name: "full"; Description: "推荐安装（主程序 + 简中官方译名 + 高清卡图工具）"
+Name: "compact"; Description: "仅安装主程序与字体"
+Name: "custom"; Description: "自定义安装"; Flags: iscustom
+
+[Components]
+Name: "main"; Description: "KoishiPro-HTmod 主程序与 MiSans 字体（必选）"; Types: full compact custom; Flags: fixed
 #ifexist "..\bin\installer\SC_Updater.exe"
-Source: "..\bin\installer\SC_Updater.exe"; DestDir: "{app}"; DestName: "更新简中官方译名.exe"; Flags: ignoreversion
+Name: "sc"; Description: "简中官方译名更新器（更新简中官方译名.exe）"; Types: full
 #endif
-#ifexist "..\bin\installer\JP_Pics_Updater.exe"
-Source: "..\bin\installer\JP_Pics_Updater.exe"; DestDir: "{app}"; DestName: "更新日文卡图.exe"; Flags: ignoreversion
+#ifexist "..\bin\installer\Pics_Updater.exe"
+Name: "pics"; Description: "高清卡图替换工具（更新卡图.exe）"; Types: full
+Name: "pics\jp"; Description: "日文卡图 (OCG)"; Types: full; Flags: exclusive
+Name: "pics\sc"; Description: "简中官方卡图 (SC，未出简中卡自动回退原图)"; Flags: exclusive
 #endif
 
+[Files]
+Source: "..\bin\release\x64\YGOPro.exe"; DestDir: "{app}"; DestName: "ygopro.exe"; Components: main; Flags: ignoreversion
+#ifexist "fonts\MiSans-Medium.ttf"
+Source: "fonts\MiSans-Medium.ttf"; DestDir: "{app}\fonts"; Components: main; Flags: ignoreversion
+#endif
 #ifexist "..\bin\installer\SC_Updater.exe"
+Source: "..\bin\installer\SC_Updater.exe"; DestDir: "{app}"; DestName: "更新简中官方译名.exe"; Components: sc; Flags: ignoreversion
+#endif
+#ifexist "..\bin\installer\Pics_Updater.exe"
+Source: "..\bin\installer\Pics_Updater.exe"; DestDir: "{app}"; DestName: "更新卡图.exe"; Components: pics; Flags: ignoreversion
+#endif
+
 [Run]
-Filename: "{app}\更新简中官方译名.exe"; WorkingDir: "{app}"; Description: "立即联网更新简体中文官方译名补丁（后续也可在萌卡目录双击重新运行）"; Flags: postinstall nowait skipifsilent
+#ifexist "..\bin\installer\SC_Updater.exe"
+Filename: "{app}\更新简中官方译名.exe"; WorkingDir: "{app}"; Components: sc; Description: "立即联网更新简体中文官方译名补丁"; Flags: postinstall nowait skipifsilent
+#endif
+#ifexist "..\bin\installer\Pics_Updater.exe"
+Filename: "{app}\更新卡图.exe"; Parameters: "--lang jp"; WorkingDir: "{app}"; Components: pics\jp; Description: "立即联网同步日文卡图（可在弹出的窗口中选卡组或全卡池）"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\更新卡图.exe"; Parameters: "--lang sc"; WorkingDir: "{app}"; Components: pics\sc; Description: "立即联网同步简中官方卡图（可在弹出的窗口中选卡组或全卡池）"; Flags: postinstall nowait skipifsilent
 #endif
 
 [Code]
