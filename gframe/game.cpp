@@ -2366,21 +2366,26 @@ void Game::ShowCardInfo(int code, bool resize) {
 	}
 	stName->setText(formatBuffer);
 	if(gameConf.modern_ui) {
-		stName->setOverrideColor(0xfff8fafc);
-		stInfo->setOverrideColor(0xff60a5fa);
-		stDataInfo->setOverrideColor(0xff93c5fd);
-		stSetName->setOverrideColor(0xff38bdf8);
-		stText->setOverrideColor(0xffe2e8f0);
+		stName->setOverrideColor(0xfff8fafc);     // 卡名：纯净柔白
+		stInfo->setOverrideColor(0xff7dd3fc);     // 种类/种族/属性：柔和冰蓝
+		stDataInfo->setOverrideColor(0xfff5d08a); // 星级/攻守：暖琥珀金
+		stSetName->setOverrideColor(0xff67c3b8);  // 系列名：柔和青碧
+		stText->setOverrideColor(0xffe2e8f0);     // 效果正文：护眼冷白
 	}
 	if((int)guiFont->getDimension(formatBuffer).Width > stName->getRelativePosition().getWidth() - gameConf.textfontsize)
 		stName->setToolTipText(formatBuffer);
 	else
 		stName->setToolTipText(nullptr);
+	float uiScale = std::min(xScale, yScale);
 	irr::s32 fontH = static_cast<irr::s32>(guiFont->getDimension(L"A").Height);
 	irr::s32 lineH = std::max<irr::s32>(23, fontH + 6);
-	irr::s32 infoTop = stName->getRelativePosition().LowerRightCorner.Y + 6;
+	irr::s32 infoW = wInfos->getRelativePosition().getWidth();
+	irr::s32 padX = std::max<irr::s32>(10, stName->getRelativePosition().UpperLeftCorner.X);
+	irr::s32 rightX = infoW - padX;
+	irr::s32 infoTop = stName->getRelativePosition().LowerRightCorner.Y + std::max<irr::s32>(8, static_cast<irr::s32>(8 * uiScale + 0.5f));
+	irr::s32 sepGap = std::max<irr::s32>(10, static_cast<irr::s32>(7 * uiScale + 0.5f));
 	irr::s32 sbW = std::max<irr::s32>(16, env->getSkin()->getSize(irr::gui::EGDS_SCROLLBAR_SIZE));
-	irr::s32 textBot = wInfos->getRelativePosition().getHeight() - wInfos->getTabHeight() - 12;
+	irr::s32 textBot = wInfos->getRelativePosition().getHeight() - wInfos->getTabHeight() - padX - 4;
 	if(textBot < infoTop + lineH * 3)
 		textBot = static_cast<irr::s32>(324 * yScale);
 	int offset = 0;
@@ -2411,7 +2416,7 @@ void Game::ShowCardInfo(int code, bool resize) {
 		stInfo->setText(formatBuffer);
 		int offset_info = 0;
 		irr::core::dimension2d<unsigned int> dtxt = guiFont->getDimension(formatBuffer);
-		if(dtxt.Width > (300 * xScale - 13) - 15)
+		if(dtxt.Width > (unsigned int)(rightX - padX))
 			offset_info = lineH;
 		const wchar_t* form = L"\u2605";
 		wchar_t adBuffer[64]{};
@@ -2442,15 +2447,16 @@ void Game::ShowCardInfo(int code, bool resize) {
 		stDataInfo->setText(formatBuffer);
 		int offset_arrows = offset_info;
 		dtxt = guiFont->getDimension(formatBuffer);
-		if(dtxt.Width > (300 * xScale - 13) - 15)
+		if(dtxt.Width > (unsigned int)(rightX - padX))
 			offset_arrows += lineH;
 		irr::s32 y1 = infoTop + lineH + offset_info;
 		irr::s32 y2 = infoTop + lineH * 2 + offset_arrows;
-		stInfo->setRelativePosition(irr::core::rect<irr::s32>(15, infoTop, static_cast<irr::s32>(300 * xScale) - 13, y1));
-		stDataInfo->setRelativePosition(irr::core::rect<irr::s32>(15, y1, static_cast<irr::s32>(300 * xScale) - 13, y2));
-		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, y2, static_cast<irr::s32>(296 * xScale), y2 + offset));
-		stText->setRelativePosition(irr::core::rect<irr::s32>(15, y2 + offset, static_cast<irr::s32>(287 * xScale) - sbW - 2, textBot));
-		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(static_cast<irr::s32>(287 * xScale) - sbW, y2 + offset, static_cast<irr::s32>(287 * xScale), textBot));
+		irr::s32 textTop = y2 + offset + sepGap;
+		stInfo->setRelativePosition(irr::core::rect<irr::s32>(padX, infoTop, rightX, y1));
+		stDataInfo->setRelativePosition(irr::core::rect<irr::s32>(padX, y1, rightX, y2));
+		stSetName->setRelativePosition(irr::core::rect<irr::s32>(padX, y2, rightX, y2 + offset));
+		stText->setRelativePosition(irr::core::rect<irr::s32>(padX, textTop, rightX - sbW - 4, textBot));
+		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(rightX - sbW, textTop, rightX, textBot));
 	}
 	else {
 		if (is_valid) {
@@ -2462,10 +2468,11 @@ void Game::ShowCardInfo(int code, bool resize) {
 		stInfo->setText(formatBuffer);
 		stDataInfo->setText(L"");
 		irr::s32 y1 = infoTop + lineH;
-		stInfo->setRelativePosition(irr::core::rect<irr::s32>(15, infoTop, static_cast<irr::s32>(300 * xScale) - 13, y1));
-		stSetName->setRelativePosition(irr::core::rect<irr::s32>(15, y1, static_cast<irr::s32>(296 * xScale), y1 + offset));
-		stText->setRelativePosition(irr::core::rect<irr::s32>(15, y1 + offset, static_cast<irr::s32>(287 * xScale) - sbW - 2, textBot));
-		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(static_cast<irr::s32>(287 * xScale) - sbW, y1 + offset, static_cast<irr::s32>(287 * xScale), textBot));
+		irr::s32 textTop = y1 + offset + sepGap;
+		stInfo->setRelativePosition(irr::core::rect<irr::s32>(padX, infoTop, rightX, y1));
+		stSetName->setRelativePosition(irr::core::rect<irr::s32>(padX, y1, rightX, y1 + offset));
+		stText->setRelativePosition(irr::core::rect<irr::s32>(padX, textTop, rightX - sbW - 4, textBot));
+		scrCardText->setRelativePosition(irr::core::rect<irr::s32>(rightX - sbW, textTop, rightX, textBot));
 	}
 	showingcode = code;
 	showingtext = dataManager.GetText(code);
@@ -3044,7 +3051,18 @@ void Game::OnResize() {
 	wCardImg->setRelativePosition(ResizeCardImgWin(1, 1, 20, 18));
 	imgCard->setRelativePosition(ResizeCardImgWin(10, 9, 0, 0));
 	wInfos->setRelativePosition(Resize(1, 275, 301, 639));
-	stName->setRelativePosition(irr::core::recti(10, 10, static_cast<irr::s32>(300 * xScale) - 13, 10 + static_cast<irr::s32>(24 * uiScale + 0.5f)));	lstLog->setRelativePosition(Resize(10, 10, 290, 290));
+	irr::s32 infoTabH = wInfos->getTabHeight();
+	irr::core::recti infoBox = wInfos->getRelativePosition();
+	for(irr::u32 i = 0; i < wInfos->getTabCount(); ++i) {
+		if(auto* tab = wInfos->getTab(i)) {
+			tab->setRelativePosition(irr::core::recti(0, infoTabH + 2, infoBox.getWidth(), infoBox.getHeight()));
+		}
+	}
+	irr::s32 infoPadX = std::max<irr::s32>(10, static_cast<irr::s32>(10 * uiScale + 0.5f));
+	irr::s32 infoPadTop = std::max<irr::s32>(10, static_cast<irr::s32>(10 * uiScale + 0.5f));
+	irr::s32 nameH = std::max<irr::s32>(26, static_cast<irr::s32>(26 * uiScale + 0.5f));
+	stName->setRelativePosition(irr::core::recti(infoPadX, infoPadTop, infoBox.getWidth() - infoPadX, infoPadTop + nameH));
+	lstLog->setRelativePosition(Resize(10, 10, 290, 290));
 	if(showingcode)
 		ShowCardInfo(showingcode, true);
 	else
