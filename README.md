@@ -1,64 +1,57 @@
-## YGOPro
-A script engine for "yu-gi-oh!" and sample gui.
+YGOPro KoishiPro-HTmod 1.0
 
-[中文说明](https://github.com/Fluorohydride/ygopro/wiki/%E4%B8%AD%E6%96%87%E8%AF%B4%E6%98%8E)
+基于 KoishiPro 定制，主打更舒适的对局视角、2K 高分屏适配，以及一键同步简中官方译名与日文/简中高清卡图。
 
-### Keys:
-* ESC: Minimize the window.
-* A: Holding down this button will let the system stop at every timing.
-* S: Holding down this button will let the system skip every timing.
-* D: Holding down this button will let the system stop at available timing.
-* R: Fix the font glitch.
-* F1~F4: Show the cards in your grave, banished zone, extra deck, xyz materials.
-* F5~F8: Show the cards in your opponent's grave, banished zone, extra deck, xyz materials.
+━━━━━━━━━━━━━━
+一、1.0 核心更新内容
+━━━━━━━━━━━━━━
+1. 3D 棋盘与界面视觉重制
+• 重新校准 3D 棋盘相机与视锥参数，视野更端正。
+• 搭载现代暗色圆角 UI 皮肤，发动、通召、特召、盖放、攻击宣言等操作按钮分色高亮，观感更直观。
+• 内置新版静态字体，卡名与效果正文清晰锐利。
 
-### Color in card list:
-#### Background: 
-* White = your card, Grey = your opponent's card  
+2. 高分屏与细节 Bug 全面修复
+• 深度适配 2K 分辨率及 200% 系统缩放，修复 HUD 折行、多选一效果框与数字宣言弹窗按钮裁切问题。
+• 彻底修复高分屏/缩放下鼠标悬停光效向上错位一格的问题，光效与点击判定完全同步。
 
-#### Text: 
-Cards in deck, extra deck and banished zone: 
-* Black = face-up, Blue = face-down
+3. 【安装时可选】一键同步简中官方译名（更新简中官方译名.exe）
+• 联网同步百鸽最新简中官方译名，内置人工校对字段表，自动统一同名异画/超框卡译名，并同步更新效果正文里的「卡名/字段」引用。
+• 自动将卡名中的异体中点统一转为标准中文间隔号「·」，彻底消除卡名中间空白缺字，同时支持中文输入法直接打「·」搜卡。
 
-Xyz materials:
-* Black = default, Blue = the owner of the xyz material is different from its controller
+4. 【安装时可选】 日文 / 简中双版本高清卡图（更新卡图.exe）
+• 支持「日文 OCG 卡图」与「简中卡图」双版本一键切换（切换时自动暂存另一套卡图包，切回无需重新下载）。
+• 简中模式采用分层策略：优先拉取官方简中卡图，未发售简中的最新卡包自动补齐百鸽高清中文图。
+• 全面兼容超先行服补丁：自动扫描先行补丁并桥接 9 位临时卡密至正式 8 位卡密，以最高优先级覆盖先行原图（覆写前自动备份原散图，可无损还原）。
+• 接入索引预检机制，支持「仅同步卡组 / 全卡池同步」、断点续传与增量升级。
 
-### Sequence:
-* Monster Zone: 1~5, starting from the left hand side.
-* Spell & Trap Zone: 1~5, starting from the left hand side.
-* Field Zone: 6
-* Pendulum Zone: 0~1, starting from the left hand side.
-* The others: 1~n, starting from the bottom.
+━━━━━━━━━━━━━━
+二、安装与使用步骤
+━━━━━━━━━━━━━━
+1. 安装前请先完全关闭萌卡（MyCard）与 YGOPro 游戏窗口。
+2. 双击运行「KoishiPro-HTmod-Setup.exe」：
+   • 安装向导会自动识别本地萌卡的 ygopro 目录；如未自动识别，请手动选择包含 ygopro.exe 与 cards.cdb 的文件夹。
+3. 在「选择安装组件」页按需勾选：
+   • 主程序与 MiSans 字体（必选）
+   • 简中官方译名更新器（可选）
+   • 高清卡图替换工具（可选，展开后可单选日文或简中）
+4. 安装完成页保持勾选「立即联网同步」，点「完成」会自动弹出命令行窗口开始更新：
+   • 首次同步卡图建议先选「1. 仅同步卡组」快速体验，确认效果后随时可去游戏目录双击「更新卡图.exe」补齐全卡池（全卡池支持随时按 Ctrl+C 暂停，下次运行自动续传）。
 
-### Deck edit page:
-* All numeric textboxs: They support >, =, <, >=, <= signs.
-* Card name: Search card names and texts by default, $foo will only search foo in card names, and @foo will search cards of "foo" archetype(due to translation, card name contains "foo" does not mean that card is "foo" card).
+━━━━━━━━━━━━━━
+三、日常维护与常见问答
+━━━━━━━━━━━━━━
+Q1：提示 Windows Defender / 杀毒软件拦截怎么办？
+A：因工具为开源自编译、未购买商业数字签名，首次运行如遇拦截点「更多信息 -> 仍要运行」或加入信任即可。
 
-### Command-line options:
-* `-e foo.cdb`: Load foo.cdb as the extra database.
-* `-n nickname`: Set the nickname.
-* `-h 192.168.0.2`: Set the host to join in LAN mode.
-* `-p 7911`: Set the port to join in LAN mode.
-* `-w abc`: Set the password to join in LAN mode.
-* `-d`: Enter the deck edit page.
-* `-d deck`: If used along with `-j` it mean select the deck, or it will open the deck to edit.
-* `-c`: Create host with default settings.
-* `-j`: Join the host specified in above, or if absent, lasthost in system.conf file.
-* `-r`: Enter the replay mode page.
-* `-r replay.yrp`: Load the replay.yrp in replay mode.
-* `-s`: Enter the single mode page.
-* `-s puzzle.lua`: Load the puzzle.lua in single mode.
-* `-k`: Keep when duel finished. See below.
+Q2：萌卡更新卡池或超先行补丁后，需要重装吗？
+A：一般只需去 ygopro 目录重新双击一次「更新简中官方译名.exe」和「更新卡图.exe」增量补齐新卡即可；若萌卡更新覆盖了 ygopro.exe 主程序，重新跑一遍安装包覆盖即可，不会丢失已有卡图缓存。
 
-#### Note:
-* `-c` `-j` `-e` `-r` `-s` shoule be the last parameter, because any parameters after it will get ignored.
-* `-d` `-c` `-j` `-e` `-r` `-s` will make YGOPro automatically exit when the duel or deck editing is finished. This is useful for some launchers. If you want to keep it, add `-k` before them.
-* `-d` `-r` `-s` support full path of file, or just filename. But remember deck filename should NOT have extension when replay and single filename MUST have extension.
+Q3：中途想在日文卡图和简中卡图之间切换怎么操作？
+A：直接双击游戏目录里的「更新卡图.exe」，按提示选择另一套语言即可自动切换，无需手动删文件。
 
-### Directories:
-* pics: .jpg card images(177*254).
-* script: .lua script files.
-* textures: Other image files.
-* deck: .ydk deck files.
-* replay: .yrp replay files.
-* expansions: *.cdb will be loaded as extra databases.
+Q4：如何卸载或还原回原版萌卡？
+A：译名与卡图均存放在 expansions 目录下（不改原版 cards.cdb），直接删掉对应文件或用萌卡客户端验证游戏完整性即可一键还原。
+
+【下载地址】
+
+使用中遇到任何 UI 错位或卡图问题，欢迎直接截图反馈！
