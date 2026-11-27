@@ -366,15 +366,15 @@ jobs:
         shell: pwsh
         run: |
           $hasSC = Test-Path "installer\sc_updater.py"
-          $hasJP = Test-Path "installer\jp_pics_updater.py"
-          if ($hasSC -or $hasJP) {
+          $hasPics = Test-Path "installer\pics_updater.py"
+          if ($hasSC -or $hasPics) {
             python -m pip install --upgrade pip pyinstaller requests pillow
           }
           if ($hasSC) {
             pyinstaller --onefile --console --distpath bin/installer --name SC_Updater installer/sc_updater.py
           }
-          if ($hasJP) {
-            pyinstaller --onefile --console --distpath bin/installer --name JP_Pics_Updater installer/jp_pics_updater.py
+          if ($hasPics) {
+            pyinstaller --onefile --console --distpath bin/installer --name Pics_Updater installer/pics_updater.py
           }
 
       - name: Build Installer (Inno Setup)
