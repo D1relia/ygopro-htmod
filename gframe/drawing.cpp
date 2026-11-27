@@ -13,6 +13,54 @@
 
 namespace ygo {
 
+static void DrawGlassPill(irr::video::IVideoDriver* driver, const irr::core::recti& rc, irr::s32 rad,
+	irr::video::SColor topCol, irr::video::SColor botCol, irr::video::SColor bdCol, bool drawBorder) {
+	irr::s32 w = rc.getWidth();
+	irr::s32 h = rc.getHeight();
+	if(w <= 0 || h <= 0)
+		return;
+	rad = std::min(rad, std::min(w / 2, h / 2));
+	auto rowInset = [&](irr::s32 row) -> irr::s32 {
+		if(rad <= 0)
+			return 0;
+		irr::f32 dy = 0.0f;
+		if(row < rad)
+			dy = static_cast<irr::f32>(rad - row) - 0.5f;
+		else if(row >= h - rad)
+			dy = static_cast<irr::f32>(row - (h - rad) + 1) - 0.5f;
+		if(dy <= 0.0f)
+			return 0;
+		irr::f32 r = static_cast<irr::f32>(rad);
+		irr::f32 dx = irr::core::squareroot(std::max(0.0f, r * r - dy * dy));
+		return static_cast<irr::s32>(r - dx + 0.5f);
+	};
+	for(irr::s32 y = 0; y < h; ++y) {
+		irr::s32 inset = rowInset(y);
+		irr::s32 x1 = rc.UpperLeftCorner.X + inset;
+		irr::s32 x2 = rc.LowerRightCorner.X - inset;
+		if(x2 <= x1)
+			continue;
+		irr::s32 py = rc.UpperLeftCorner.Y + y;
+		irr::f32 t = (h > 1) ? static_cast<irr::f32>(y) / static_cast<irr::f32>(h - 1) : 0.0f;
+		irr::video::SColor rowCol(
+			static_cast<irr::u32>(static_cast<irr::s32>(topCol.getAlpha()) + (static_cast<irr::s32>(botCol.getAlpha()) - static_cast<irr::s32>(topCol.getAlpha())) * t),
+			static_cast<irr::u32>(static_cast<irr::s32>(topCol.getRed()) + (static_cast<irr::s32>(botCol.getRed()) - static_cast<irr::s32>(topCol.getRed())) * t),
+			static_cast<irr::u32>(static_cast<irr::s32>(topCol.getGreen()) + (static_cast<irr::s32>(botCol.getGreen()) - static_cast<irr::s32>(topCol.getGreen())) * t),
+			static_cast<irr::u32>(static_cast<irr::s32>(topCol.getBlue()) + (static_cast<irr::s32>(botCol.getBlue()) - static_cast<irr::s32>(topCol.getBlue())) * t));
+		driver->draw2DRectangle(rowCol, irr::core::recti(x1, py, x2, py + 1));
+		if(drawBorder && bdCol.getAlpha() > 0) {
+			if(y == 0 || y == h - 1) {
+				driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, x2, py + 1));
+			} else {
+				irr::s32 refY = (y < rad) ? (y - 1) : (y >= h - rad ? (y + 1) : y);
+				irr::s32 edgeW = std::max<irr::s32>(1, rowInset(refY) - inset);
+				driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, std::min(x2, x1 + edgeW), py + 1));
+				driver->draw2DRectangle(bdCol, irr::core::recti(std::max(x1, x2 - edgeW), py, x2, py + 1));
+			}
+		}
+	}
+}
+
 void Game::Draw2DImageQuad(irr::video::IVideoDriver* driver, irr::video::ITexture* texture,
 						   const irr::core::recti& sourceRect, const irr::core::vector2di corners[4],
 						   bool useAlphaChannel, irr::video::SColor color) {
@@ -1105,10 +1153,28 @@ void Game::DrawMisc() {
 		irr::f32 vy = (0.5f - v[1] * invW * 0.5f) * 640.0f;
 		return irr::core::vector2di((int)(vx + 0.5f), (int)(vy + 0.5f));
 	};
-	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text) {		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
+	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text) {
+		if(text.empty())
+			return;
+		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
-		DrawShadowText(numFont, text, Resize(pt.X - 45, pt.Y - 10, pt.X + 45, pt.Y + 12), Resize(0, 1, 2, 1), 0xffffff00, 0xff000000, true, true, 0);
+		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
+		irr::s32 sx = center.UpperLeftCorner.X;
+		irr::s32 sy = center.UpperLeftCorner.Y;
+
+		auto dim = numFont->getDimension(text.c_str());
+		irr::s32 padX = std::max<irr::s32>(7, static_cast<irr::s32>(dim.Height * 0.34f));
+		irr::s32 padY = std::max<irr::s32>(2, static_cast<irr::s32>(dim.Height * 0.10f));
+		irr::s32 boxH = static_cast<irr::s32>(dim.Height) + padY * 2;
+		irr::s32 boxW = std::max<irr::s32>(boxH + 4, static_cast<irr::s32>(dim.Width) + padX * 2);
+		irr::s32 rad = std::max<irr::s32>(5, boxH / 3);
+		irr::core::recti box(sx - boxW / 2, sy - boxH / 2, sx + boxW / 2, sy + boxH / 2);
+		irr::core::recti shadow(box.UpperLeftCorner.X - 1, box.UpperLeftCorner.Y + 2, box.LowerRightCorner.X + 1, box.LowerRightCorner.Y + 3);
+
+		DrawGlassPill(driver, shadow, rad + 1, irr::video::SColor(75, 0, 0, 0), irr::video::SColor(75, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, box, rad, irr::video::SColor(162, 22, 30, 46), irr::video::SColor(180, 12, 17, 29), irr::video::SColor(150, 148, 163, 184), true);
+		DrawShadowText(numFont, text, box, Resize(1, 1, 1, 1), 0xfffef08a, 0xff000000, true, true, 0);
 	};
 	auto DrawScaleText = [&](const irr::video::S3DVertex* zone, const wchar_t* text, bool isRight) {
 		if(!text || !text[0])
@@ -1116,86 +1182,35 @@ void Game::DrawMisc() {
 		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, 0.05f));
-		// 己方下移、对方上移，避开卡图主体
 		pt.Y += (pt.Y > 320) ? 14 : -12;
 		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
 		irr::s32 sx = center.UpperLeftCorner.X;
 		irr::s32 sy = center.UpperLeftCorner.Y;
 
-		auto drawGlassPill = [&](const irr::core::recti& rc, irr::s32 rad, irr::video::SColor topCol, irr::video::SColor botCol, irr::video::SColor bdCol, bool drawBorder) {
-			irr::s32 w = rc.getWidth();
-			irr::s32 h = rc.getHeight();
-			if(w <= 0 || h <= 0)
-				return;
-			rad = std::min(rad, std::min(w / 2, h / 2));
-			auto rowInset = [&](irr::s32 row) -> irr::s32 {
-				if(rad <= 0)
-					return 0;
-				irr::f32 dy = 0.0f;
-				if(row < rad)
-					dy = static_cast<irr::f32>(rad - row) - 0.5f;
-				else if(row >= h - rad)
-					dy = static_cast<irr::f32>(row - (h - rad) + 1) - 0.5f;
-				if(dy <= 0.0f)
-					return 0;
-				irr::f32 r = static_cast<irr::f32>(rad);
-				irr::f32 dx = irr::core::squareroot(std::max(0.0f, r * r - dy * dy));
-				return static_cast<irr::s32>(r - dx + 0.5f);
-			};
-			for(irr::s32 y = 0; y < h; ++y) {
-				irr::s32 inset = rowInset(y);
-				irr::s32 x1 = rc.UpperLeftCorner.X + inset;
-				irr::s32 x2 = rc.LowerRightCorner.X - inset;
-				if(x2 <= x1)
-					continue;
-				irr::s32 py = rc.UpperLeftCorner.Y + y;
-				irr::f32 t = (h > 1) ? static_cast<irr::f32>(y) / static_cast<irr::f32>(h - 1) : 0.0f;
-				irr::video::SColor rowCol(
-					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getAlpha()) + (static_cast<irr::s32>(botCol.getAlpha()) - static_cast<irr::s32>(topCol.getAlpha())) * t),
-					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getRed()) + (static_cast<irr::s32>(botCol.getRed()) - static_cast<irr::s32>(topCol.getRed())) * t),
-					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getGreen()) + (static_cast<irr::s32>(botCol.getGreen()) - static_cast<irr::s32>(topCol.getGreen())) * t),
-					static_cast<irr::u32>(static_cast<irr::s32>(topCol.getBlue()) + (static_cast<irr::s32>(botCol.getBlue()) - static_cast<irr::s32>(topCol.getBlue())) * t));
-				driver->draw2DRectangle(rowCol, irr::core::recti(x1, py, x2, py + 1));
-				if(drawBorder && bdCol.getAlpha() > 0) {
-					if(y == 0 || y == h - 1) {
-						driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, x2, py + 1));
-					} else {
-						irr::s32 refY = (y < rad) ? (y - 1) : (y >= h - rad ? (y + 1) : y);
-						irr::s32 edgeW = std::max<irr::s32>(1, rowInset(refY) - inset);
-						driver->draw2DRectangle(bdCol, irr::core::recti(x1, py, std::min(x2, x1 + edgeW), py + 1));
-						driver->draw2DRectangle(bdCol, irr::core::recti(std::max(x1, x2 - edgeW), py, x2, py + 1));
-					}
-				}
-			}
-		};
-
 		auto dim = numFont->getDimension(text);
-		irr::s32 padY = std::max<irr::s32>(2, static_cast<irr::s32>(dim.Height * 0.14f));
+		irr::s32 padY = std::max<irr::s32>(2, static_cast<irr::s32>(dim.Height * 0.12f));
 		irr::s32 boxH = static_cast<irr::s32>(dim.Height) + padY * 2;
 		irr::s32 barW = std::max<irr::s32>(3, boxH / 9);
-		irr::s32 padX = std::max<irr::s32>(8, static_cast<irr::s32>(dim.Height * 0.40f));
-		irr::s32 boxW = std::max<irr::s32>(static_cast<irr::s32>(boxH * 1.45f), static_cast<irr::s32>(dim.Width) + padX * 2 + barW + 4);
+		irr::s32 padX = std::max<irr::s32>(8, static_cast<irr::s32>(dim.Height * 0.38f));
+		irr::s32 boxW = std::max<irr::s32>(static_cast<irr::s32>(boxH * 1.42f), static_cast<irr::s32>(dim.Width) + padX * 2 + barW + 4);
 		irr::s32 rad = std::max<irr::s32>(5, boxH / 3);
 		irr::core::recti box(sx - boxW / 2, sy - boxH / 2, sx + boxW / 2, sy + boxH / 2);
 
-		irr::video::SColor accentCol = isRight ? irr::video::SColor(255, 248, 113, 113) : irr::video::SColor(255, 56, 189, 248);
-		irr::video::SColor borderCol = isRight ? irr::video::SColor(215, 248, 113, 113) : irr::video::SColor(215, 56, 189, 248);
-		irr::video::SColor glassTop  = isRight ? irr::video::SColor(225, 40, 26, 40) : irr::video::SColor(225, 22, 36, 56);
-		irr::video::SColor glassBot  = irr::video::SColor(235, 14, 20, 34);
+		irr::video::SColor accentCol = isRight ? irr::video::SColor(235, 248, 113, 113) : irr::video::SColor(235, 56, 189, 248);
+		irr::video::SColor borderCol = isRight ? irr::video::SColor(185, 248, 113, 113) : irr::video::SColor(185, 56, 189, 248);
+		irr::video::SColor glassTop  = isRight ? irr::video::SColor(168, 52, 26, 44) : irr::video::SColor(168, 22, 42, 68);
+		irr::video::SColor glassBot  = irr::video::SColor(182, 12, 18, 32);
 
-		// 柔和投影 + 深色玻璃圆角胶囊
 		irr::core::recti shadow(box.UpperLeftCorner.X - 1, box.UpperLeftCorner.Y + 2, box.LowerRightCorner.X + 1, box.LowerRightCorner.Y + 3);
-		drawGlassPill(shadow, rad + 1, irr::video::SColor(105, 0, 0, 0), irr::video::SColor(105, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
-		drawGlassPill(box, rad, glassTop, glassBot, borderCol, true);
+		DrawGlassPill(driver, shadow, rad + 1, irr::video::SColor(75, 0, 0, 0), irr::video::SColor(75, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, box, rad, glassTop, glassBot, borderCol, true);
 
-		// 左刻度左侧光条 / 右刻度右侧光条
 		irr::s32 barPadV = std::max<irr::s32>(4, boxH / 4);
 		irr::s32 barMargin = std::max<irr::s32>(4, barW + 1);
 		irr::s32 barX = isRight ? (box.LowerRightCorner.X - barMargin - barW) : (box.UpperLeftCorner.X + barMargin);
 		irr::core::recti barRect(barX, box.UpperLeftCorner.Y + barPadV, barX + barW, box.LowerRightCorner.Y - barPadV);
-		drawGlassPill(barRect, barW / 2, accentCol, accentCol, accentCol, false);
+		DrawGlassPill(driver, barRect, barW / 2, accentCol, accentCol, accentCol, false);
 
-		// 文字避开光条做视觉居中
 		irr::s32 textShift = (barW + 2) / 2;
 		irr::core::recti textRect(
 			box.UpperLeftCorner.X + (isRight ? 0 : textShift),
@@ -1217,7 +1232,7 @@ void Game::DrawMisc() {
 			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
 			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, maxY, 0.05f));
 			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, minY, 0.05f));
-			DrawStatus(pcard, ptAD.X, ptAD.Y - 2, ptLV.X + 2, ptLV.Y);
+			DrawStatus(pcard, ptAD.X, ptAD.Y + 1, ptLV.X + 2, ptLV.Y + 2);
 		}
 	}
 	for(int i = 0; i < 7; ++i) {
@@ -1230,7 +1245,7 @@ void Game::DrawMisc() {
 			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
 			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, minY, 0.05f));
 			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, maxY, 0.05f));
-			DrawStatus(pcard, ptAD.X, ptAD.Y - 16, ptLV.X + 2, ptLV.Y - 16);
+			DrawStatus(pcard, ptAD.X, ptAD.Y - 17, ptLV.X + 2, ptLV.Y - 17);
 		}
 	}
 	if(dInfo.duel_rule < 4) {
@@ -1278,19 +1293,82 @@ void Game::DrawMisc() {
 	}
 }
 void Game::DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2) {
-	DrawShadowText(adFont, L"/", Resize(x1 - 3, y1 + 1, x1 + 5, y1 + 21), Resize(1, 1, 1, 1), 0xffffffff, 0xff000000, true, false, 0);
-	int w = adFont->getDimension(pcard->atkstring).Width;
-	DrawShadowText(adFont, pcard->atkstring, Resize(x1 - 4, y1 + 1, x1 - 4, y1 + 21, -w, 0, 0, 0), Resize(1, 1, 1, 1),
-		pcard->attack > pcard->base_attack ? 0xffffff00 : pcard->attack < pcard->base_attack ? 0xffff2090 : 0xffffffff, 0xff000000);
-	if(pcard->type & TYPE_LINK) {
-		w = adFont->getDimension(pcard->linkstring).Width;
-		DrawShadowText(adFont, pcard->linkstring, Resize(x1 + 5, y1 + 1, x1 + 5, y1 + 21, 0, 0, w, 0), Resize(1, 1, 1, 1), 0xff99ffff);
-	} else {
-		w = adFont->getDimension(pcard->defstring).Width;
-		DrawShadowText(adFont, pcard->defstring, Resize(x1 + 5, y1 + 1, x1 + 5, y1 + 21, 0, 0, w, 0), Resize(1, 1, 1, 1),
-			pcard->defense > pcard->base_defense ? 0xffffff00 : pcard->defense < pcard->base_defense ? 0xffff2090 : 0xffffffff);
-		DrawShadowText(adFont, pcard->lvstring, Resize(x2 + 1, y2, x2 + 3, y2 + 21), Resize(1, 1, 1, 1),
-			(pcard->type & TYPE_XYZ) ? 0xffff80ff : (pcard->type & TYPE_TUNER) ? 0xffffff00 : 0xffffffff);
+	irr::s32 fontH = static_cast<irr::s32>(adFont->getDimension(L"0").Height);
+	if(fontH <= 0)
+		fontH = 12;
+
+	// 1. 卡片正下方：攻守 / Link 细长毛玻璃胶囊
+	const wchar_t* rightStr = (pcard->type & TYPE_LINK) ? pcard->linkstring : pcard->defstring;
+	if(pcard->atkstring[0] && rightStr[0]) {
+		irr::s32 atkW = static_cast<irr::s32>(adFont->getDimension(pcard->atkstring).Width);
+		irr::s32 slashW = static_cast<irr::s32>(adFont->getDimension(L"/").Width);
+		irr::s32 rightW = static_cast<irr::s32>(adFont->getDimension(rightStr).Width);
+		irr::s32 gap = std::max<irr::s32>(2, fontH / 6);
+		irr::s32 padX = std::max<irr::s32>(6, fontH / 3);
+		irr::s32 padY = std::max<irr::s32>(1, fontH / 9);
+		irr::s32 pillW = atkW + gap + slashW + gap + rightW + padX * 2;
+		irr::s32 pillH = fontH + padY * 2;
+		irr::s32 rad = std::max<irr::s32>(4, pillH / 3);
+
+		irr::core::recti adAnchor = Resize(x1, y1, x1, y1);
+		irr::s32 px = adAnchor.UpperLeftCorner.X - pillW / 2;
+		irr::s32 py = adAnchor.UpperLeftCorner.Y;
+		irr::core::recti adBox(px, py, px + pillW, py + pillH);
+		irr::core::recti adShadow(adBox.UpperLeftCorner.X, adBox.UpperLeftCorner.Y + 1, adBox.LowerRightCorner.X, adBox.LowerRightCorner.Y + 2);
+
+		irr::video::SColor adTop = (pcard->type & TYPE_LINK)
+			? irr::video::SColor(172, 18, 34, 54)
+			: irr::video::SColor(172, 20, 28, 42);
+		irr::video::SColor adBot(190, 11, 16, 28);
+		irr::video::SColor adBd = (pcard->type & TYPE_LINK)
+			? irr::video::SColor(160, 56, 189, 248)
+			: irr::video::SColor(145, 115, 134, 160);
+
+		DrawGlassPill(driver, adShadow, rad, irr::video::SColor(72, 0, 0, 0), irr::video::SColor(72, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, adBox, rad, adTop, adBot, adBd, true);
+
+		irr::s32 curX = adBox.UpperLeftCorner.X + padX;
+		irr::u32 atkCol = pcard->attack > pcard->base_attack ? 0xfffde047
+			: pcard->attack < pcard->base_attack ? 0xfffb7185 : 0xfff8fafc;
+		DrawShadowText(adFont, pcard->atkstring, irr::core::recti(curX - 1, adBox.UpperLeftCorner.Y, curX + atkW + 1, adBox.LowerRightCorner.Y),
+			Resize(1, 1, 1, 1), atkCol, 0xff000000, true, true, 0);
+		curX += atkW + gap;
+		DrawShadowText(adFont, L"/", irr::core::recti(curX - 1, adBox.UpperLeftCorner.Y, curX + slashW + 1, adBox.LowerRightCorner.Y),
+			Resize(1, 1, 1, 1), 0xff94a3b8, 0xff000000, true, true, 0);
+		curX += slashW + gap;
+		irr::u32 rightCol = (pcard->type & TYPE_LINK) ? 0xff7dd3fc
+			: (pcard->defense > pcard->base_defense ? 0xfffde047
+				: pcard->defense < pcard->base_defense ? 0xfffb7185 : 0xfff8fafc);
+		DrawShadowText(adFont, rightStr, irr::core::recti(curX - 1, adBox.UpperLeftCorner.Y, curX + rightW + 1, adBox.LowerRightCorner.Y),
+			Resize(1, 1, 1, 1), rightCol, 0xff000000, true, true, 0);
+	}
+
+	// 2. 卡片左上角：等级 / 阶级迷你胶囊
+	if(!(pcard->type & TYPE_LINK) && pcard->lvstring[0]) {
+		irr::s32 lvTextW = static_cast<irr::s32>(adFont->getDimension(pcard->lvstring).Width);
+		irr::s32 lvPadX = std::max<irr::s32>(5, fontH / 4);
+		irr::s32 lvPadY = std::max<irr::s32>(1, fontH / 10);
+		irr::s32 lvH = fontH + lvPadY * 2;
+		irr::s32 lvW = std::max<irr::s32>(lvH + 2, lvTextW + lvPadX * 2);
+		irr::s32 lvRad = std::max<irr::s32>(4, lvH / 3);
+
+		irr::core::recti lvAnchor = Resize(x2, y2, x2, y2);
+		irr::core::recti lvBox(lvAnchor.UpperLeftCorner.X, lvAnchor.UpperLeftCorner.Y,
+			lvAnchor.UpperLeftCorner.X + lvW, lvAnchor.UpperLeftCorner.Y + lvH);
+		irr::core::recti lvShadow(lvBox.UpperLeftCorner.X, lvBox.UpperLeftCorner.Y + 1, lvBox.LowerRightCorner.X, lvBox.LowerRightCorner.Y + 2);
+
+		bool isXyz = (pcard->type & TYPE_XYZ) != 0;
+		bool isTuner = (pcard->type & TYPE_TUNER) != 0;
+		irr::video::SColor lvTop = isXyz ? irr::video::SColor(175, 42, 24, 58)
+			: isTuner ? irr::video::SColor(175, 48, 38, 18) : irr::video::SColor(172, 22, 31, 46);
+		irr::video::SColor lvBot(190, 11, 16, 28);
+		irr::video::SColor lvBd = isXyz ? irr::video::SColor(175, 192, 132, 252)
+			: isTuner ? irr::video::SColor(175, 250, 204, 21) : irr::video::SColor(145, 120, 140, 168);
+		irr::u32 lvCol = isXyz ? 0xfff0abfc : isTuner ? 0xfffde047 : 0xfff8fafc;
+
+		DrawGlassPill(driver, lvShadow, lvRad, irr::video::SColor(72, 0, 0, 0), irr::video::SColor(72, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, lvBox, lvRad, lvTop, lvBot, lvBd, true);
+		DrawShadowText(adFont, pcard->lvstring, lvBox, Resize(1, 1, 1, 1), lvCol, 0xff000000, true, true, 0);
 	}
 }
 void Game::DrawGUI() {
