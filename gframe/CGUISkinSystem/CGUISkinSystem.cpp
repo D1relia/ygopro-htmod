@@ -1,5 +1,5 @@
-#include "game.h"
-#include "data_manager.h"
+#include "../game.h"
+#include "../data_manager.h"
 #include "CGUISkinSystem.h"
 
 namespace {
