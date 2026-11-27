@@ -139,6 +139,12 @@ begin
     AutoFound := True;
   end;
 
+  WizardForm.ComponentsList.Offset := ScaleX(12);
+  WizardForm.ComponentsList.MinItemHeight := ScaleY(24);
+  WizardForm.RunList.Offset := ScaleX(12);
+  WizardForm.RunList.MinItemHeight := ScaleY(24);
+
+
   DetectedLabel := TNewStaticText.Create(WizardForm.SelectDirPage);
   DetectedLabel.Parent := WizardForm.SelectDirPage;
   DetectedLabel.Left := WizardForm.DirEdit.Left;
