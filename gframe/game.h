@@ -106,7 +106,7 @@ struct Config {
 	int search_multiple_keywords{ 1 };
 	int chkIgnoreDeckChanges{ 0 };
 	int defaultOT{ 1 };
-	int enable_bot_mode{ 0 };
+	int enable_bot_mode{ 1 };
 	int bot_room_public{ 0 };
 	int quick_animation{ 0 };
 	int auto_save_replay{ 0 };
