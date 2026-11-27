@@ -1,4 +1,20 @@
+#include "game.h"
+#include "data_manager.h"
 #include "CGUISkinSystem.h"
+
+namespace {
+video::SColor getCardTypeAccentColor(unsigned int type) {
+	if(type & TYPE_LINK)    return video::SColor(255, 37, 137, 245);  // 连接：深海蓝
+	if(type & TYPE_XYZ)     return video::SColor(255, 218, 178, 72);  // 超量：暗鎏金
+	if(type & TYPE_SYNCHRO) return video::SColor(255, 226, 232, 240); // 同步：珍珠白
+	if(type & TYPE_FUSION)  return video::SColor(255, 168, 85, 247);  // 融合：亮紫
+	if(type & TYPE_RITUAL)  return video::SColor(255, 96, 165, 250);  // 仪式：天蓝
+	if(type & TYPE_SPELL)   return video::SColor(255, 20, 184, 166);  // 魔法：翠青
+	if(type & TYPE_TRAP)    return video::SColor(255, 236, 72, 153);  // 陷阱：洋红
+	if(type & TYPE_NORMAL)  return video::SColor(255, 234, 197, 110); // 通常怪兽：暖黄
+	return video::SColor(255, 234, 138, 62);                          // 效果怪兽：暖橙棕
+}
+}
 
 namespace {
 class ScopedWorkingDirectory {
@@ -528,7 +544,7 @@ void CModernLightSkin::draw3DButtonPaneStandard(IGUIElement* element, const core
 	drawRoundedBox(sh, rad, video::SColor(45, 2, 6, 16), video::SColor(0, 0, 0, 0), clip, true);
 
 	s32 elemId = element ? element->getID() : -1;
-	if(elemId >= 240 && elemId <= 249) {
+	if(elemId >= 240 && elemId <= 247) {
 		video::SColor accent(255, 148, 163, 184);
 		video::SColor bgNorm(244, 24, 32, 46);
 		video::SColor bgHov(252, 40, 52, 74);
@@ -611,10 +627,38 @@ void CModernLightSkin::draw3DSunkenPane(IGUIElement* element, video::SColor bgco
 		return;
 	}
 	if(element && element->getType() == EGUIET_STATIC_TEXT) {
+		bool isCardName = (::ygo::mainGame && element == ::ygo::mainGame->stName);
 		bool drawPillFill = fillBackGround || (rect.getHeight() < 80);
-		video::SColor bg = drawPillFill ? video::SColor(220, 32, 43, 61) : video::SColor(0, 0, 0, 0);
-		video::SColor bd = drawPillFill ? video::SColor(0, 0, 0, 0) : video::SColor(180, 56, 72, 98);
-		drawRoundedBox(rect, drawPillFill ? 6 : 10, bg, bd, clip, drawPillFill);
+		video::SColor bg = isCardName
+			? video::SColor(238, 30, 41, 59)
+			: (drawPillFill ? video::SColor(220, 32, 43, 61) : video::SColor(0, 0, 0, 0));
+		video::SColor bd = isCardName
+			? video::SColor(180, 64, 82, 110)
+			: (drawPillFill ? video::SColor(0, 0, 0, 0) : video::SColor(180, 56, 72, 98));
+		drawRoundedBox(rect, drawPillFill ? 7 : 10, bg, bd, clip, drawPillFill);
+
+		if(isCardName && ::ygo::mainGame->showingcode != 0) {
+			const auto& datas = ::ygo::dataManager.GetDataTable();
+			auto cit = datas.find(::ygo::mainGame->showingcode);
+			if(cit != datas.end()) {
+				unsigned int ctype = cit->second.type;
+				video::SColor accent = getCardTypeAccentColor(ctype);
+				s32 barW = std::max<s32>(3, rect.getHeight() / 8);
+				s32 padV = std::max<s32>(4, rect.getHeight() / 6);
+				s32 barX = rect.UpperLeftCorner.X + std::max<s32>(4, barW);
+				s32 topY = rect.UpperLeftCorner.Y + padV;
+				s32 botY = rect.LowerRightCorner.Y - padV;
+				if(botY > topY + 2) {
+					if(ctype & TYPE_PENDULUM) {
+						s32 midY = (topY + botY) / 2;
+						VideoDriver->draw2DRectangle(accent, core::rect<s32>(barX, topY, barX + barW, midY), clip);
+						VideoDriver->draw2DRectangle(video::SColor(255, 20, 184, 166), core::rect<s32>(barX, midY, barX + barW, botY), clip);
+					} else {
+						drawRoundedBox(core::rect<s32>(barX, topY, barX + barW, botY), barW / 2, accent, accent, clip, true);
+					}
+				}
+			}
+		}
 		return;
 	}
 	video::SColor fill = (element && !element->isEnabled())
@@ -661,29 +705,6 @@ void CModernLightSkin::draw3DToolBar(IGUIElement* element, const core::rect<s32>
 	drawRoundedBox(rect, 8, video::SColor(238, 24, 32, 46), video::SColor(200, 56, 70, 94), clip, true);
 }
 
-void CModernLightSkin::draw3DTabButton(IGUIElement* element, bool active, const core::rect<s32>& rect, const core::rect<s32>* clip, EGUI_ALIGNMENT alignment) {
-	bool hov = isHovered(element, rect, clip);
-	core::rect<s32> r = rect;
-	r.UpperLeftCorner.X += 2;
-	r.LowerRightCorner.X -= 2;
-	r.UpperLeftCorner.Y += 2;
-	r.LowerRightCorner.Y -= 2;
-	if(active) {
-		core::rect<s32> sh = r;
-		sh.UpperLeftCorner.Y += 1; sh.LowerRightCorner.Y += 1;
-		drawRoundedBox(sh, 6, video::SColor(40, 2, 6, 16), video::SColor(0, 0, 0, 0), clip, true);
-		drawRoundedBox(r, 6, video::SColor(250, 35, 46, 65), video::SColor(210, 64, 79, 104), clip, true);
-		s32 padX = std::max<s32>(6, r.getWidth() / 5);
-		if(r.UpperLeftCorner.X + padX < r.LowerRightCorner.X - padX) {
-			s32 barY = (alignment == EGUIA_UPPERLEFT) ? (r.LowerRightCorner.Y - 3) : (r.UpperLeftCorner.Y + 1);
-			VideoDriver->draw2DRectangle(video::SColor(255, 10, 132, 255), core::rect<s32>(r.UpperLeftCorner.X + padX, barY, r.LowerRightCorner.X - padX, barY + 2), clip);
-		}
-	} else {
-		video::SColor bg = hov ? video::SColor(220, 30, 40, 58) : video::SColor(155, 20, 27, 40);
-		drawRoundedBox(r, 6, bg, video::SColor(0, 0, 0, 0), clip, true);
-	}
-}
-
 void CModernLightSkin::draw3DTabBody(IGUIElement* element, bool border, bool background, const core::rect<s32>& rect, const core::rect<s32>* clip, s32 tabHeight, gui::EGUI_ALIGNMENT alignment) {
 	core::rect<s32> body = rect;
 	if(tabHeight == -1)
@@ -693,7 +714,46 @@ void CModernLightSkin::draw3DTabBody(IGUIElement* element, bool border, bool bac
 	else
 		body.LowerRightCorner.Y -= tabHeight + 2;
 	drawSoftShadow(body, 10, clip);
-	drawRoundedBox(body, 10, video::SColor(238, 24, 32, 46), border ? video::SColor(210, 56, 70, 94) : video::SColor(0, 0, 0, 0), clip, background);
+	drawRoundedBox(body, 10, video::SColor(242, 20, 27, 40), border ? video::SColor(215, 58, 74, 100) : video::SColor(0, 0, 0, 0), clip, background);
+
+	if(::ygo::mainGame && element == ::ygo::mainGame->wInfos
+		&& ::ygo::mainGame->wInfos->getActiveTab() == 0
+		&& ::ygo::mainGame->showingcode != 0
+		&& ::ygo::mainGame->stText && ::ygo::mainGame->stText->isVisible()) {
+		core::rect<s32> txtAbs = ::ygo::mainGame->stText->getAbsolutePosition();
+		s32 padX = std::max<s32>(10, txtAbs.UpperLeftCorner.X - body.UpperLeftCorner.X);
+		s32 halfGap = std::max<s32>(5, padX * 35 / 100);
+		s32 divY = txtAbs.UpperLeftCorner.Y - halfGap;
+		if(divY > body.UpperLeftCorner.Y + 20 && divY < body.LowerRightCorner.Y - 20) {
+			VideoDriver->draw2DRectangle(
+				video::SColor(72, 148, 163, 184),
+				core::rect<s32>(body.UpperLeftCorner.X + padX, divY, body.LowerRightCorner.X - padX, divY + 1),
+				clip);
+		}
+	}
+}
+
+void CModernLightSkin::draw3DTabButton(IGUIElement* element, bool active, const core::rect<s32>& rect, const core::rect<s32>* clip, EGUI_ALIGNMENT alignment) {
+	bool hov = isHovered(element, rect, clip);
+	core::rect<s32> r = rect;
+	r.UpperLeftCorner.X += 2;
+	r.LowerRightCorner.X -= 2;
+	r.UpperLeftCorner.Y += 2;
+	r.LowerRightCorner.Y -= 3;
+	if(active) {
+		core::rect<s32> sh = r;
+		sh.UpperLeftCorner.Y += 1; sh.LowerRightCorner.Y += 1;
+		drawRoundedBox(sh, 6, video::SColor(40, 2, 6, 16), video::SColor(0, 0, 0, 0), clip, true);
+		drawRoundedBox(r, 6, video::SColor(250, 32, 43, 62), video::SColor(215, 68, 86, 114), clip, true);
+		s32 padX = std::max<s32>(8, r.getWidth() / 4);
+		if(r.UpperLeftCorner.X + padX < r.LowerRightCorner.X - padX) {
+			s32 barY = (alignment == EGUIA_UPPERLEFT) ? (r.LowerRightCorner.Y - 3) : (r.UpperLeftCorner.Y + 1);
+			VideoDriver->draw2DRectangle(video::SColor(255, 56, 189, 248), core::rect<s32>(r.UpperLeftCorner.X + padX, barY, r.LowerRightCorner.X - padX, barY + 2), clip);
+		}
+	} else {
+		video::SColor bg = hov ? video::SColor(220, 28, 38, 56) : video::SColor(140, 18, 24, 36);
+		drawRoundedBox(r, 6, bg, video::SColor(0, 0, 0, 0), clip, true);
+	}
 }
 
 void CModernLightSkin::drawIcon(IGUIElement* element, EGUI_DEFAULT_ICON icon, const core::position2di position, u32 starttime, u32 currenttime, bool loop, const core::rect<s32>* clip) {
