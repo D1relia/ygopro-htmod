@@ -362,14 +362,19 @@ jobs:
         run: |
           MSBuild.exe build\YGOPro.sln /m /p:Configuration=Release /p:Platform=x64
       
-      - name: Build SC Translation Updater (PyInstaller)
+      - name: Build Python Updaters (PyInstaller)
         shell: pwsh
         run: |
-          if (Test-Path "installer\sc_updater.py") {
-            python -m pip install --upgrade pip pyinstaller requests
+          $hasSC = Test-Path "installer\sc_updater.py"
+          $hasJP = Test-Path "installer\jp_pics_updater.py"
+          if ($hasSC -or $hasJP) {
+            python -m pip install --upgrade pip pyinstaller requests pillow
+          }
+          if ($hasSC) {
             pyinstaller --onefile --console --distpath bin/installer --name SC_Updater installer/sc_updater.py
-          } else {
-            Write-Host "installer/sc_updater.py not found, skipping SC_Updater build."
+          }
+          if ($hasJP) {
+            pyinstaller --onefile --console --distpath bin/installer --name JP_Pics_Updater installer/jp_pics_updater.py
           }
 
       - name: Build Installer (Inno Setup)
