@@ -15,8 +15,10 @@ OutputDir=..\bin\installer
 OutputBaseFilename=KoishiPro-HTmod-Setup
 Compression=lzma2/max
 SolidCompression=yes
-WizardStyle=modern
 UninstallFilesDir={app}\HTmod_Uninstall
+WizardStyle=modern
+WizardSizePercent=125,115
+WizardResizable=yes
 
 [Languages]
 Name: "default"; MessagesFile: "compiler:Default.isl"
