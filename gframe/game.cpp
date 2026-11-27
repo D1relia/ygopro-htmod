@@ -1189,13 +1189,6 @@ void Game::MainLoop() {
 	LoadExpansionsAll();
 	wchar_t cap[256];
 	camera = smgr->addCameraSceneNode(0);
-	if(gameConf.modern_ui) {
-		float boardCenterX = (matManager.vFieldMzone[0][0][0].Pos.X + matManager.vFieldMzone[0][4][1].Pos.X) * 0.5f;
-		gameConf.cam_x = boardCenterX;
-		gameConf.cam_look_x = boardCenterX;
-		gameConf.proj_left = -0.96f;
-		gameConf.proj_right = 0.53f;
-	}
 	irr::core::matrix4 mProjection;
 	BuildProjectionMatrix(mProjection, gameConf.proj_left, gameConf.proj_right, gameConf.proj_bottom, gameConf.proj_top, 1.0f, 100.0f);
 	camera->setProjectionMatrix(mProjection);
