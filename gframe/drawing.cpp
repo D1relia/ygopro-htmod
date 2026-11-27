@@ -346,7 +346,8 @@ void Game::DrawBackGround() {
 	driver->setTransform(irr::video::ETS_WORLD, irr::core::IdentityMatrix);
 	bool drawField = false;
 	int rule = (dInfo.duel_rule >= 4) ? 1 : 0;
-	if(gameConf.draw_field_spell) {
+	int fieldAlphaPct = std::max(0, std::min(100, gameConf.field_spell_alpha));
+	if(gameConf.draw_field_spell && fieldAlphaPct > 0) {
 		int fieldcode1 = -1;
 		int fieldcode2 = -1;
 		if(dField.szone[0][5] && dField.szone[0][5]->position & POS_FACEUP)
@@ -354,29 +355,38 @@ void Game::DrawBackGround() {
 		if(dField.szone[1][5] && dField.szone[1][5]->position & POS_FACEUP)
 			fieldcode2 = dField.szone[1][5]->code;
 		int fieldcode = (fieldcode1 > 0) ? fieldcode1 : fieldcode2;
+		irr::u32 alpha = static_cast<irr::u32>(fieldAlphaPct * 255 / 100);
+		auto drawFieldMesh = [&](irr::video::ITexture* tex, const irr::video::S3DVertex* srcVerts) {
+			if(!tex)
+				return;
+			if(!drawField) {
+				// 先铺深色原版棋盘底板，再按不透明度叠场地贴图，避免画面发花
+				irr::video::SMaterial baseMat = matManager.mTexture;
+				baseMat.setTexture(0, imageManager.tField[rule]);
+				baseMat.ZWriteEnable = false;
+				driver->setMaterial(baseMat);
+				driver->drawVertexPrimitiveList(matManager.vField, 4, matManager.iRectangle, 2);
+				drawField = true;
+			}
+			irr::video::S3DVertex verts[4];
+			for(int k = 0; k < 4; ++k) {
+				verts[k] = srcVerts[k];
+				verts[k].Color = irr::video::SColor(alpha, 255, 255, 255);
+			}
+			irr::video::SMaterial fieldMat = matManager.mTexture;
+			fieldMat.setTexture(0, tex);
+			fieldMat.Lighting = false;
+			fieldMat.ZWriteEnable = false;
+			if(alpha < 255)
+				fieldMat.MaterialType = irr::video::EMT_TRANSPARENT_VERTEX_ALPHA;
+			driver->setMaterial(fieldMat);
+			driver->drawVertexPrimitiveList(verts, 4, matManager.iRectangle, 2);
+		};
 		if(fieldcode1 > 0 && fieldcode2 > 0 && fieldcode1 != fieldcode2) {
-			auto texture = imageManager.GetTextureField(fieldcode1);
-			if(texture) {
-				drawField = true;
-				matManager.mTexture.setTexture(0, texture);
-				driver->setMaterial(matManager.mTexture);
-				driver->drawVertexPrimitiveList(matManager.vFieldSpell1, 4, matManager.iRectangle, 2);
-			}
-			texture = imageManager.GetTextureField(fieldcode2);
-			if(texture) {
-				drawField = true;
-				matManager.mTexture.setTexture(0, texture);
-				driver->setMaterial(matManager.mTexture);
-				driver->drawVertexPrimitiveList(matManager.vFieldSpell2, 4, matManager.iRectangle, 2);
-			}
+			drawFieldMesh(imageManager.GetTextureField(fieldcode1), matManager.vFieldSpell1);
+			drawFieldMesh(imageManager.GetTextureField(fieldcode2), matManager.vFieldSpell2);
 		} else if(fieldcode > 0) {
-			auto texture = imageManager.GetTextureField(fieldcode);
-			if(texture) {
-				drawField = true;
-				matManager.mTexture.setTexture(0, texture);
-				driver->setMaterial(matManager.mTexture);
-				driver->drawVertexPrimitiveList(matManager.vFieldSpell, 4, matManager.iRectangle, 2);
-			}
+			drawFieldMesh(imageManager.GetTextureField(fieldcode), matManager.vFieldSpell);
 		}
 	}
 	matManager.mTexture.setTexture(0, drawField ? imageManager.tFieldTransparent[rule] : imageManager.tField[rule]);
@@ -1232,7 +1242,7 @@ void Game::DrawMisc() {
 			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
 			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, maxY, 0.05f));
 			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, minY, 0.05f));
-			DrawStatus(pcard, ptAD.X, ptAD.Y + 1, ptLV.X + 2, ptLV.Y + 2);
+			DrawStatus(pcard, ptAD.X, ptAD.Y, ptLV.X + 2, ptLV.Y);
 		}
 	}
 	for(int i = 0; i < 7; ++i) {
@@ -1245,7 +1255,7 @@ void Game::DrawMisc() {
 			float maxY = std::max(zone[0].Pos.Y, zone[2].Pos.Y);
 			auto ptAD = ProjectToVirtual(irr::core::vector3df(cx, minY, 0.05f));
 			auto ptLV = ProjectToVirtual(irr::core::vector3df(minX, maxY, 0.05f));
-			DrawStatus(pcard, ptAD.X, ptAD.Y - 17, ptLV.X + 2, ptLV.Y - 17);
+			DrawStatus(pcard, ptAD.X, ptAD.Y, ptLV.X + 2, ptLV.Y);
 		}
 	}
 	if(dInfo.duel_rule < 4) {
@@ -1296,8 +1306,9 @@ void Game::DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2) {
 	irr::s32 fontH = static_cast<irr::s32>(adFont->getDimension(L"0").Height);
 	if(fontH <= 0)
 		fontH = 12;
+	bool isBottom = (y1 > y2);
 
-	// 1. 卡片正下方：攻守 / Link 细长毛玻璃胶囊
+	// 1. 卡片底边内侧：攻守 / Link 细长毛玻璃胶囊（紧贴卡边，不侵占邻格）
 	const wchar_t* rightStr = (pcard->type & TYPE_LINK) ? pcard->linkstring : pcard->defstring;
 	if(pcard->atkstring[0] && rightStr[0]) {
 		irr::s32 atkW = static_cast<irr::s32>(adFont->getDimension(pcard->atkstring).Width);
@@ -1312,19 +1323,19 @@ void Game::DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2) {
 
 		irr::core::recti adAnchor = Resize(x1, y1, x1, y1);
 		irr::s32 px = adAnchor.UpperLeftCorner.X - pillW / 2;
-		irr::s32 py = adAnchor.UpperLeftCorner.Y;
+		irr::s32 py = isBottom ? (adAnchor.UpperLeftCorner.Y - pillH - 2) : (adAnchor.UpperLeftCorner.Y + 2);
 		irr::core::recti adBox(px, py, px + pillW, py + pillH);
 		irr::core::recti adShadow(adBox.UpperLeftCorner.X, adBox.UpperLeftCorner.Y + 1, adBox.LowerRightCorner.X, adBox.LowerRightCorner.Y + 2);
 
 		irr::video::SColor adTop = (pcard->type & TYPE_LINK)
-			? irr::video::SColor(172, 18, 34, 54)
-			: irr::video::SColor(172, 20, 28, 42);
-		irr::video::SColor adBot(190, 11, 16, 28);
+			? irr::video::SColor(182, 18, 34, 54)
+			: irr::video::SColor(182, 20, 28, 42);
+		irr::video::SColor adBot(198, 11, 16, 28);
 		irr::video::SColor adBd = (pcard->type & TYPE_LINK)
-			? irr::video::SColor(160, 56, 189, 248)
-			: irr::video::SColor(145, 115, 134, 160);
+			? irr::video::SColor(168, 56, 189, 248)
+			: irr::video::SColor(150, 115, 134, 160);
 
-		DrawGlassPill(driver, adShadow, rad, irr::video::SColor(72, 0, 0, 0), irr::video::SColor(72, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, adShadow, rad, irr::video::SColor(78, 0, 0, 0), irr::video::SColor(78, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
 		DrawGlassPill(driver, adBox, rad, adTop, adBot, adBd, true);
 
 		irr::s32 curX = adBox.UpperLeftCorner.X + padX;
@@ -1343,7 +1354,7 @@ void Game::DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2) {
 			Resize(1, 1, 1, 1), rightCol, 0xff000000, true, true, 0);
 	}
 
-	// 2. 卡片左上角：等级 / 阶级迷你胶囊
+	// 2. 卡片角内侧：等级 / 阶级迷你胶囊
 	if(!(pcard->type & TYPE_LINK) && pcard->lvstring[0]) {
 		irr::s32 lvTextW = static_cast<irr::s32>(adFont->getDimension(pcard->lvstring).Width);
 		irr::s32 lvPadX = std::max<irr::s32>(5, fontH / 4);
@@ -1353,20 +1364,21 @@ void Game::DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2) {
 		irr::s32 lvRad = std::max<irr::s32>(4, lvH / 3);
 
 		irr::core::recti lvAnchor = Resize(x2, y2, x2, y2);
-		irr::core::recti lvBox(lvAnchor.UpperLeftCorner.X, lvAnchor.UpperLeftCorner.Y,
-			lvAnchor.UpperLeftCorner.X + lvW, lvAnchor.UpperLeftCorner.Y + lvH);
+		irr::s32 ly = isBottom ? (lvAnchor.UpperLeftCorner.Y + 2) : (lvAnchor.UpperLeftCorner.Y - lvH - 2);
+		irr::core::recti lvBox(lvAnchor.UpperLeftCorner.X, ly,
+			lvAnchor.UpperLeftCorner.X + lvW, ly + lvH);
 		irr::core::recti lvShadow(lvBox.UpperLeftCorner.X, lvBox.UpperLeftCorner.Y + 1, lvBox.LowerRightCorner.X, lvBox.LowerRightCorner.Y + 2);
 
 		bool isXyz = (pcard->type & TYPE_XYZ) != 0;
 		bool isTuner = (pcard->type & TYPE_TUNER) != 0;
-		irr::video::SColor lvTop = isXyz ? irr::video::SColor(175, 42, 24, 58)
-			: isTuner ? irr::video::SColor(175, 48, 38, 18) : irr::video::SColor(172, 22, 31, 46);
-		irr::video::SColor lvBot(190, 11, 16, 28);
-		irr::video::SColor lvBd = isXyz ? irr::video::SColor(175, 192, 132, 252)
-			: isTuner ? irr::video::SColor(175, 250, 204, 21) : irr::video::SColor(145, 120, 140, 168);
+		irr::video::SColor lvTop = isXyz ? irr::video::SColor(180, 42, 24, 58)
+			: isTuner ? irr::video::SColor(180, 48, 38, 18) : irr::video::SColor(178, 22, 31, 46);
+		irr::video::SColor lvBot(196, 11, 16, 28);
+		irr::video::SColor lvBd = isXyz ? irr::video::SColor(178, 192, 132, 252)
+			: isTuner ? irr::video::SColor(178, 250, 204, 21) : irr::video::SColor(150, 120, 140, 168);
 		irr::u32 lvCol = isXyz ? 0xfff0abfc : isTuner ? 0xfffde047 : 0xfff8fafc;
 
-		DrawGlassPill(driver, lvShadow, lvRad, irr::video::SColor(72, 0, 0, 0), irr::video::SColor(72, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
+		DrawGlassPill(driver, lvShadow, lvRad, irr::video::SColor(78, 0, 0, 0), irr::video::SColor(78, 0, 0, 0), irr::video::SColor(0, 0, 0, 0), false);
 		DrawGlassPill(driver, lvBox, lvRad, lvTop, lvBot, lvBd, true);
 		DrawShadowText(adFont, pcard->lvstring, lvBox, Resize(1, 1, 1, 1), lvCol, 0xff000000, true, true, 0);
 	}
