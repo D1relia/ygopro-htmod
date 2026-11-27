@@ -2027,15 +2027,15 @@ bool ClientField::OnCommonEvent(const irr::SEvent& event) {
 			}
 			case SCROLL_TAB_HELPER: {
 				irr::core::rect<irr::s32> pos = mainGame->tabHelper->getRelativePosition();
-				mainGame->tabHelper->setRelativePosition(irr::core::recti(0, mainGame->scrTabHelper->getPos() * -1, pos.LowerRightCorner.X, pos.LowerRightCorner.Y));
+				irr::s32 baseY = mainGame->scrTabHelper->getRelativePosition().UpperLeftCorner.Y;
+				mainGame->tabHelper->setRelativePosition(irr::core::recti(pos.UpperLeftCorner.X, baseY - mainGame->scrTabHelper->getPos(), pos.LowerRightCorner.X, pos.LowerRightCorner.Y));
 				return true;
-				break;
 			}
 			case SCROLL_TAB_SYSTEM: {
 				irr::core::rect<irr::s32> pos = mainGame->tabSystem->getRelativePosition();
-				mainGame->tabSystem->setRelativePosition(irr::core::recti(0, mainGame->scrTabSystem->getPos() * -1, pos.LowerRightCorner.X, pos.LowerRightCorner.Y));
+				irr::s32 baseY = mainGame->scrTabSystem->getRelativePosition().UpperLeftCorner.Y;
+				mainGame->tabSystem->setRelativePosition(irr::core::recti(pos.UpperLeftCorner.X, baseY - mainGame->scrTabSystem->getPos(), pos.LowerRightCorner.X, pos.LowerRightCorner.Y));
 				return true;
-				break;
 			}
 			}
 			break;
