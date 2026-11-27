@@ -322,7 +322,7 @@ bool Game::Initialize() {
 	editbox_list.push_back(ebNickName);
 	lstHostList = env->addListBox(irr::core::rect<irr::s32>(10, 60, 570, 320), wLanWindow, LISTBOX_LAN_HOST, true);
 	lstHostList->setItemHeight(18);
-	btnLanRefresh = env->addButton(irr::core::rect<irr::s32>(150, 325, 250, 350), wLanWindow, BUTTON_LAN_REFRESH, dataManager.GetSysString(1217));
+	btnLanRefresh = env->addButton(irr::core::rect<irr::s32>(150, 325, 250, 350), wLanWindow, BUTTON_LAN_REFRESH, L"常用服务器");
 	btnServerList = env->addButton(irr::core::rect<irr::s32>(280, 325, 380, 350), wLanWindow, BUTTON_SERVER_LIST, dataManager.GetSysString(1239));
 	env->addStaticText(dataManager.GetSysString(1221), irr::core::rect<irr::s32>(10, 360, 220, 380), false, false, wLanWindow);
 	ebJoinHost = env->addEditBox(gameConf.lasthost, irr::core::rect<irr::s32>(110, 355, 420, 380), true, wLanWindow);
@@ -445,7 +445,7 @@ bool Game::Initialize() {
 	btnHostPrepStart = env->addButton(irr::core::rect<irr::s32>(230, 280, 340, 305), wHostPrepare, BUTTON_HP_START, dataManager.GetSysString(1215));
 	btnHostPrepCancel = env->addButton(irr::core::rect<irr::s32>(350, 280, 460, 305), wHostPrepare, BUTTON_HP_CANCEL, dataManager.GetSysString(1210));
 	//server list
-	wServerList = env->addWindow(irr::core::rect<irr::s32>(25, 80, 325, 400), false, dataManager.GetSysString(1239));
+	wServerList = env->addWindow(irr::core::rect<irr::s32>(25, 80, 325, 400), false, L"服务器列表");
 	wServerList->getCloseButton()->setVisible(false);
 	wServerList->setVisible(false);
 	wServerList->setDraggable(true);
@@ -890,7 +890,7 @@ bool Game::Initialize() {
 	btnSideSort->setVisible(false);
 	btnSideReload = env->addButton(irr::core::rect<irr::s32>(440, 100, 500, 130), 0, BUTTON_SIDE_RELOAD, dataManager.GetSysString(1309));
 	btnSideReload->setVisible(false);
-	btnDeckCode = env->addButton(irr::core::rect<irr::s32>(5, 65, 75, 90), wDeckEdit, BUTTON_DECK_CODE, dataManager.GetSysString(1394));
+	btnDeckCode = env->addButton(irr::core::rect<irr::s32>(5, 65, 75, 90), wDeckEdit, BUTTON_DECK_CODE, L"卡组代码");
 	//
 	scrFilter = env->addScrollBar(false, irr::core::recti(999, 161, 1019, 629), 0, SCROLL_FILTER);
 	scrFilter->setLargeStep(10);
@@ -2887,7 +2887,7 @@ void Game::OnResize() {
 	irr::gui::IGUIElement* scaledPanels[] = {
 		wMainMenu, wDeckManage, wCategories, wLinkMarks,
 		wLanWindow, wCreateHost, wHostPrepare, wReplay, wSinglePlay,
-		wHand, wFTSelect, wMessage, wACMessage, wQuery, wSurrender, wOptions,
+		wHand, wFTSelect, wMessage, wACMessage, wQuery, wSurrender, wOptions, wServerList,
 		wANNumber, wANCard, wANAttribute, wANRace, wReplaySave, wDeckCode, wDMQuery,
 		tabHelper, tabSystem
 	};
