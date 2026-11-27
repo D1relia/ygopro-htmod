@@ -3017,32 +3017,46 @@ void Game::OnResize() {
 
 	stHintMsg->setRelativePosition(ResizeWin(500, 60, 820, 90));
 
-	//sound / music volume bar
-	scrSoundVolume->setRelativePosition(irr::core::recti(scrSoundVolume->getRelativePosition().UpperLeftCorner.X, scrSoundVolume->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrSoundVolume->getRelativePosition().LowerRightCorner.Y));
-	scrMusicVolume->setRelativePosition(irr::core::recti(scrMusicVolume->getRelativePosition().UpperLeftCorner.X, scrMusicVolume->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrMusicVolume->getRelativePosition().LowerRightCorner.Y));
-	cbLocale->setRelativePosition(irr::core::recti(cbLocale->getRelativePosition().UpperLeftCorner.X, cbLocale->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbLocale->getRelativePosition().LowerRightCorner.Y));
-	cbSkin->setRelativePosition(irr::core::recti(cbSkin->getRelativePosition().UpperLeftCorner.X, cbSkin->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbSkin->getRelativePosition().LowerRightCorner.Y));
-	cbResolution->setRelativePosition(irr::core::recti(cbResolution->getRelativePosition().UpperLeftCorner.X, cbResolution->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, cbResolution->getRelativePosition().LowerRightCorner.Y));
-	scrResizePopupMenu->setRelativePosition(irr::core::recti(scrResizePopupMenu->getRelativePosition().UpperLeftCorner.X, scrResizePopupMenu->getRelativePosition().UpperLeftCorner.Y, 20 + (300 * xScale) - 70, scrResizePopupMenu->getRelativePosition().LowerRightCorner.Y));
+	//sound / music volume bar & helper/system tab layout
+	irr::core::recti infoWinRect = Resize(1, 275, 301, 639);
+	irr::s32 infoW = infoWinRect.getWidth();
+	irr::s32 infoBodyH = infoWinRect.getHeight() - (wInfos->getTabHeight() + 2);
+	irr::s32 tabPadX = std::max<irr::s32>(10, static_cast<irr::s32>(10 * uiScale + 0.5f));
+	irr::s32 tabPadY = std::max<irr::s32>(10, static_cast<irr::s32>(10 * uiScale + 0.5f));
+	irr::s32 tabSbW = std::max<irr::s32>(14, static_cast<irr::s32>(10 * uiScale + 0.5f));
+	irr::s32 tabSbGap = std::max<irr::s32>(4, static_cast<irr::s32>(4 * uiScale + 0.5f));
+	irr::s32 tabContentW = std::max<irr::s32>(100, infoW - tabPadX * 2 - tabSbW - tabSbGap);
+	irr::s32 ctrlRight = tabContentW - 4;
+	auto fitTabCtrlRight = [&](irr::gui::IGUIElement* ctrl) {
+		if(!ctrl) return;
+		irr::core::recti r = ctrl->getRelativePosition();
+		ctrl->setRelativePosition(irr::core::recti(r.UpperLeftCorner.X, r.UpperLeftCorner.Y, std::max<irr::s32>(r.UpperLeftCorner.X + 40, ctrlRight), r.LowerRightCorner.Y));
+	};
+	fitTabCtrlRight(scrSoundVolume);
+	fitTabCtrlRight(scrMusicVolume);
+	fitTabCtrlRight(cbLocale);
+	fitTabCtrlRight(cbSkin);
+	fitTabCtrlRight(cbResolution);
+	fitTabCtrlRight(scrResizePopupMenu);
 
-	irr::core::recti tabHelperPos = irr::core::recti(0, 0, 300 * xScale - 50, 365 * yScale - 65);
+	irr::core::recti tabHelperPos(tabPadX, tabPadY, tabPadX + tabContentW, infoBodyH - tabPadY);
 	tabHelper->setRelativePosition(tabHelperPos);
-	scrTabHelper->setRelativePosition(irr::core::recti(tabHelperPos.LowerRightCorner.X + 2, 0, tabHelperPos.LowerRightCorner.X + 22, tabHelperPos.LowerRightCorner.Y));
+	scrTabHelper->setRelativePosition(irr::core::recti(infoW - tabPadX - tabSbW, tabPadY, infoW - tabPadX, infoBodyH - tabPadY));
 	irr::s32 tabHelperLastY = elmTabHelperLast->getRelativePosition().LowerRightCorner.Y;
-	if(tabHelperLastY > tabHelperPos.LowerRightCorner.Y) {
-		scrTabHelper->setMax(tabHelperLastY - tabHelperPos.LowerRightCorner.Y + 5);
+	if(tabHelperLastY > tabHelperPos.getHeight()) {
+		scrTabHelper->setMax(tabHelperLastY - tabHelperPos.getHeight() + tabPadY);
 		scrTabHelper->setPos(0);
 		scrTabHelper->setVisible(true);
 	}
 	else
 		scrTabHelper->setVisible(false);
 
-	irr::core::recti tabSystemPos = irr::core::recti(0, 0, 300 * xScale - 50, 365 * yScale - 65);
+	irr::core::recti tabSystemPos(tabPadX, tabPadY, tabPadX + tabContentW, infoBodyH - tabPadY);
 	tabSystem->setRelativePosition(tabSystemPos);
-	scrTabSystem->setRelativePosition(irr::core::recti(tabSystemPos.LowerRightCorner.X + 2, 0, tabSystemPos.LowerRightCorner.X + 22, tabSystemPos.LowerRightCorner.Y));
+	scrTabSystem->setRelativePosition(irr::core::recti(infoW - tabPadX - tabSbW, tabPadY, infoW - tabPadX, infoBodyH - tabPadY));
 	irr::s32 tabSystemLastY = elmTabSystemLast->getRelativePosition().LowerRightCorner.Y;
-	if(tabSystemLastY > tabSystemPos.LowerRightCorner.Y) {
-		scrTabSystem->setMax(tabSystemLastY - tabSystemPos.LowerRightCorner.Y + 5);
+	if(tabSystemLastY > tabSystemPos.getHeight()) {
+		scrTabSystem->setMax(tabSystemLastY - tabSystemPos.getHeight() + tabPadY);
 		scrTabSystem->setPos(0);
 		scrTabSystem->setVisible(true);
 	} else
