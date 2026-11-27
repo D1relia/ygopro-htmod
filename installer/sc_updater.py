@@ -654,6 +654,32 @@ BUILTIN_SETNAME_TEXT = """#setnames, using tab for comment
 # ===========================================
 
 
+def normalize_dots(text: str) -> str:
+    """将日文片假名中点等异体中点统一转为标准中文间隔号 · (U+00B7)，避免缺字并兼容中文输入法搜卡"""
+    if not text:
+        return text
+    return (
+        text.replace("\u30fb", "\u00b7")  # 日文片假名中点 ・ -> ·
+            .replace("\u2027", "\u00b7")  # 异体连字点 ‧ -> ·
+            .replace("\uff65", "\u00b7")  # 半角片假名中点 ･ -> ·
+    )
+
+
+def normalize_setname_file_text(text: str) -> str:
+    """仅标准化 !setname 行中注释符(\\t)之前的译名中点，保留末尾日文对照注释"""
+    result_lines = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("!setname"):
+            if "\t" in line:
+                main_part, comment = line.split("\t", 1)
+                result_lines.append(f"{normalize_dots(main_part)}\t{comment}")
+            else:
+                result_lines.append(normalize_dots(line))
+        else:
+            result_lines.append(line)
+    return "\n".join(result_lines) + "\n"
+
+
 def parse_setname_line(line: str) -> tuple[int, str, str] | None:
     stripped = line.strip()
     if not stripped.startswith("!setname"):
@@ -686,7 +712,7 @@ def load_curated_setnames() -> tuple[dict[int, str], dict[int, str], list[str]]:
         parsed = parse_setname_line(line)
         if parsed:
             code, clean_name, full_line = parsed
-            code_to_clean_name[code] = clean_name
+            code_to_clean_name[code] = normalize_dots(clean_name)
             code_to_full_line[code] = full_line
 
     return code_to_clean_name, code_to_full_line, out_lines
@@ -714,9 +740,9 @@ def prepare_strings_and_setmap() -> dict[str, str]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if EXTERNAL_SETNAME_FILE.exists():
         ext_content = EXTERNAL_SETNAME_FILE.read_text(encoding="utf-8-sig", errors="replace")
-        OUTPUT_STRINGS.write_text(ext_content, encoding="utf-8")
+        OUTPUT_STRINGS.write_text(normalize_setname_file_text(ext_content), encoding="utf-8")
     else:
-        OUTPUT_STRINGS.write_text("\n".join(builtin_lines) + "\n", encoding="utf-8")
+        OUTPUT_STRINGS.write_text(normalize_setname_file_text("\n".join(builtin_lines)), encoding="utf-8")
 
     print(
         f"[3/5] 已生成 expansions/strings.conf（共内置 {len(code_to_new_clean)} 个字段，"
@@ -747,8 +773,8 @@ def fetch_ygocdb_mapping() -> tuple[dict[int, str], dict[int, str], dict[str, st
 
     for item in cards_data.values():
         text_obj = item.get("text", {}) if isinstance(item.get("text"), dict) else {}
-        sc_val = (item.get("sc_name") or text_obj.get("sc_name") or "").strip()
-        md_val = (item.get("md_name") or text_obj.get("md_name") or "").strip()
+        sc_val = normalize_dots((item.get("sc_name") or text_obj.get("sc_name") or "").strip())
+        md_val = normalize_dots((item.get("md_name") or text_obj.get("md_name") or "").strip())
         cn_val = (item.get("cn_name") or text_obj.get("cn_name") or "").strip()
 
         card_id = item.get("id")
@@ -860,6 +886,7 @@ def update_single_cdb(
                     break
 
         if chosen_name:
+            chosen_name = normalize_dots(chosen_name)
             for m in members:
                 resolved_names[m] = chosen_name
                 m_old = orig_id_to_name.get(m, "")
@@ -890,17 +917,20 @@ def update_single_cdb(
         card_id = r[0]
         old_name = r[8] or ""
         old_desc = r[9] or ""
-        target_name = resolved_names.get(card_id, old_name)
+        target_name = normalize_dots(resolved_names.get(card_id, old_name))
         target_desc = old_desc
 
         if old_desc and "「" in old_desc:
             new_desc = quote_pattern.sub(replace_quoted, old_desc)
             if new_desc != old_desc:
                 target_desc = new_desc
-                desc_changed_count += 1
+
+        target_desc = normalize_dots(target_desc)
 
         if target_name != old_name:
             name_changed_count += 1
+        if target_desc != old_desc:
+            desc_changed_count += 1
 
         if target_name != old_name or target_desc != old_desc:
             updates.append((target_name, target_desc, card_id))
