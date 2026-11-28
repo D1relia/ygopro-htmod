@@ -319,22 +319,43 @@ def save_json(path: str, data: dict) -> None:
 
 
 def load_ygocdb_name_map() -> dict[str, list[int]]:
+    import hashlib
+
     session = get_session()
     cached = load_json(CARDS_MAP_CACHE_PATH)
     cached_md5 = str(cached.get("md5", "")).strip().lower()
     cached_map = cached.get("map") if isinstance(cached.get("map"), dict) else {}
 
+    # 快速探测 ygocdb.com 是否可达（超时短，防止无法访问的地区干等）
     req_headers = {"Accept": "*/*"}
     remote_md5 = ""
+    md5_reachable = False
     try:
-        resp = session.get(CARDS_MD5_URL, headers=req_headers, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+        resp = session.get(CARDS_MD5_URL, headers=req_headers, timeout=(5, 8))
         if resp.ok:
             remote_md5 = resp.text.strip().strip('"').strip("'").lower()
+            md5_reachable = bool(remote_md5)
     except Exception:
         pass
 
-    if cached_map and (not remote_md5 or remote_md5 == cached_md5):
-        return cached_map
+    # 读取安装包内置（或手动放入）的 expansions/cards.zip 及其 MD5
+    local_zip = os.path.join(EXPANSIONS_DIR, "cards.zip")
+    local_zip_bytes: bytes | None = None
+    local_zip_md5 = ""
+    if os.path.isfile(local_zip):
+        try:
+            with open(local_zip, "rb") as f:
+                local_zip_bytes = f.read()
+            local_zip_md5 = hashlib.md5(local_zip_bytes).hexdigest().lower()
+        except OSError:
+            local_zip_bytes = None
+
+    # 1. 本地 JSON 缓存已是最新，直接复用
+    if cached_map:
+        if md5_reachable and remote_md5 == cached_md5:
+            return cached_map
+        if not md5_reachable and (not local_zip_md5 or local_zip_md5 == cached_md5):
+            return cached_map
 
     def parse_cards_zip(zip_bytes: bytes) -> dict[str, list[int]]:
         with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
@@ -366,44 +387,56 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
                         lst.append(official_id)
         return name_map
 
-    print("  - 正在更新百鸽卡名映射库 (cards.zip)，用于桥接超先行 9 位卡密...")
-    last_err = ""
-    for attempt in range(RETRY_TIMES):
+    # 2. 无法连接 ygocdb，或内置 cards.zip 已经是最新版本 -> 直接解析内置文件
+    if local_zip_bytes and (not md5_reachable or local_zip_md5 == remote_md5):
         try:
-            with session.get(CARDS_ZIP_URL, headers=req_headers, timeout=(15, 60), stream=True) as resp:
-                resp.raise_for_status()
-                buf = io.BytesIO()
-                for chunk in resp.iter_content(chunk_size=65536):
-                    if chunk:
-                        buf.write(chunk)
-            name_map = parse_cards_zip(buf.getvalue())
+            name_map = parse_cards_zip(local_zip_bytes)
             if name_map:
-                save_json(CARDS_MAP_CACHE_PATH, {"md5": remote_md5, "map": name_map})
-                print(f"  - 卡名映射库更新完成，共索引 {len(name_map)} 条卡名")
-                return name_map
-        except Exception as e:
-            last_err = f"{type(e).__name__}: {e}"
-            session = reset_session()
-            if attempt < RETRY_TIMES - 1:
-                time.sleep(1.5 * (attempt + 1))
-
-    # 若在线拉取失败，顺带检查 expansions/ 下是否有手动放入的 cards.zip
-    local_zip = os.path.join(EXPANSIONS_DIR, "cards.zip")
-    if os.path.isfile(local_zip):
-        try:
-            with open(local_zip, "rb") as f:
-                name_map = parse_cards_zip(f.read())
-            if name_map:
-                save_json(CARDS_MAP_CACHE_PATH, {"md5": remote_md5, "map": name_map})
-                print(f"  - 已从本地 expansions/cards.zip 加载卡名映射 ({len(name_map)} 条)")
+                save_json(CARDS_MAP_CACHE_PATH, {"md5": local_zip_md5, "map": name_map})
+                print(f"  - 已从内置 expansions/cards.zip 加载卡名映射 ({len(name_map)} 条)")
                 return name_map
         except Exception:
             pass
 
+    # 3. 仅在 ygocdb 可达且远程有更新时才联网拉取
+    last_err = ""
+    if md5_reachable:
+        print("  - 正在更新百鸽卡名映射库 (cards.zip)，用于桥接超先行 9 位卡密...")
+        for attempt in range(RETRY_TIMES):
+            try:
+                with session.get(CARDS_ZIP_URL, headers=req_headers, timeout=(15, 60), stream=True) as resp:
+                    resp.raise_for_status()
+                    buf = io.BytesIO()
+                    for chunk in resp.iter_content(chunk_size=65536):
+                        if chunk:
+                            buf.write(chunk)
+                name_map = parse_cards_zip(buf.getvalue())
+                if name_map:
+                    save_json(CARDS_MAP_CACHE_PATH, {"md5": remote_md5, "map": name_map})
+                    print(f"  - 卡名映射库更新完成，共索引 {len(name_map)} 条卡名")
+                    return name_map
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                session = reset_session()
+                if attempt < RETRY_TIMES - 1:
+                    time.sleep(1.5 * (attempt + 1))
+
+        # 联网下载失败时，用内置 cards.zip 兜底
+        if local_zip_bytes:
+            try:
+                name_map = parse_cards_zip(local_zip_bytes)
+                if name_map:
+                    save_json(CARDS_MAP_CACHE_PATH, {"md5": local_zip_md5, "map": name_map})
+                    print(f"  - [提示] 在线更新失败 ({last_err})，已回退至内置 cards.zip ({len(name_map)} 条)")
+                    return name_map
+            except Exception:
+                pass
+
     if cached_map:
-        print(f"  - [提示] cards.zip 拉取失败 ({last_err})，继续使用本地缓存映射")
+        print("  - [提示] 无法连接 ygocdb.com，继续使用本地缓存映射")
         return cached_map
-    print(f"  - [提示] cards.zip 拉取失败 ({last_err})，将改用本地数据库卡名进行桥接")
+    reason = f" ({last_err})" if last_err else " (无法连接 ygocdb.com)"
+    print(f"  - [提示] 未获取到 cards.zip{reason}，将改用本地数据库卡名进行桥接")
     return {}
 
 def fetch_metadata(subdir: str) -> dict[int, str] | None:
