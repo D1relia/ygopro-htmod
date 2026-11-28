@@ -458,7 +458,15 @@ const wchar_t* DataManager::GetMapString(const wstring_map& table, uint32_t code
 	return csit->second.c_str();
 }
 const wchar_t* DataManager::GetSysString(uint32_t code) const {
-	return GetMapString(_sysStrings, code);
+	auto csit = _sysStrings.find(code);
+	if(csit != _sysStrings.end())
+		return csit->second.c_str();
+	switch(code) {
+	case 1386: return L"放大菜单";
+	case 1387: return L"随窗口缩放选择卡片对话框";
+	case 1388: return L"左右互换「是/否」按钮位置";
+	default: return unknown_string;
+	}
 }
 const wchar_t* DataManager::GetVictoryString(uint32_t code) const {
 	return GetMapString(_victoryStrings, code);
