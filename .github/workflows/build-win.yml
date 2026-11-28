@@ -357,7 +357,7 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v3
 
-        - name: Download cards.zip for offline bridging
+      - name: Download cards.zip for offline bridging
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "installer/assets" | Out-Null
