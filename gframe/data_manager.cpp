@@ -465,6 +465,9 @@ const wchar_t* DataManager::GetSysString(uint32_t code) const {
 	case 1386: return L"放大菜单";
 	case 1387: return L"随窗口缩放选择卡片对话框";
 	case 1388: return L"左右互换「是/否」按钮位置";
+	case 1394: return L"卡组代码";
+	case 1395: return L"请输入卡组代码：";
+	case 1491: return L"默认皮肤";
 	default: return unknown_string;
 	}
 }
