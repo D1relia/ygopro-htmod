@@ -74,6 +74,7 @@ Source: "..\bin\installer\SC_Updater.exe"; DestDir: "{app}"; DestName: "更新�
 Source: "..\bin\installer\Pics_Updater.exe"; DestDir: "{app}"; DestName: "更新卡图.exe"; Components: pics; Flags: ignoreversion
 #endif
 Source: "..\htmod_textures\*.png"; DestDir: "{app}\textures"; Flags: ignoreversion
+Source: "assets\cards.zip"; DestDir: "{app}\expansions"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Run]
 #ifexist "..\bin\installer\SC_Updater.exe"
