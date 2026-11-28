@@ -43,9 +43,9 @@ LANG_CONFIG = {
     },
 }
 
-MAX_WORKERS = 4          # 并发线程数（配合全局 QPS 限速，4 线程足够跑满）
-MAX_QPS = 8.0            # 全局每秒最大请求数（稳妥值 6~10，遇限流会自动降速）
-MIN_QPS = 1.5            # 触发限流后的最低保底速率
+MAX_WORKERS = 8          # 并发线程数（配合全局 QPS 限速，4 线程足够跑满）
+MAX_QPS = 15.0            # 全局每秒最大请求数（稳妥值 6~10，遇限流会自动降速）
+MIN_QPS = 4            # 触发限流后的最低保底速率
 CONNECT_TIMEOUT = 10     # 连接超时（秒）
 READ_TIMEOUT = 20        # 读取超时（秒）
 META_TIMEOUT = 20        # metadata / cards.zip 拉取超时（秒）
@@ -73,7 +73,7 @@ _NAME_CLEAN_RE = re.compile(r"[\s·・•‧･\-－—–_“”「」『』\"'
 
 
 class AdaptiveRateLimiter:
-    """全局 QPS 节流 + 任一线程遇限流时触发全局冷却，避免多线程续封。"""
+    """全局 QPS 节流 + 同波去重冷却，避免单次波动把速率瞬间打到底。"""
 
     def __init__(self, max_qps: float = MAX_QPS, min_qps: float = MIN_QPS):
         self._lock = threading.Lock()
@@ -84,7 +84,13 @@ class AdaptiveRateLimiter:
         self._cooldown_until = 0.0
         self._consec_ok = 0
         self._consec_throttle = 0
+        self.throttle_hits = 0
         self.stop_event = threading.Event()
+
+    @property
+    def current_qps(self) -> float:
+        with self._lock:
+            return 1.0 / self._interval
 
     def wait(self) -> bool:
         while not self.stop_event.is_set():
@@ -104,25 +110,27 @@ class AdaptiveRateLimiter:
         with self._lock:
             self._consec_ok += 1
             self._consec_throttle = 0
-            # 连续成功 25 张后缓慢恢复速率
-            if self._consec_ok >= 25 and self._interval > self._base_interval:
-                self._interval = max(self._base_interval, self._interval * 0.90)
+            # 连续成功 12 张即加快回速
+            if self._consec_ok >= 12 and self._interval > self._base_interval:
+                self._interval = max(self._base_interval, self._interval * 0.85)
                 self._consec_ok = 0
 
     def on_throttle(self, retry_after: float | None = None, severe: bool = False) -> None:
         with self._lock:
+            now = time.monotonic()
+            # 同一波请求已在冷却期内时直接忽略，防止 8 线程连续扣 8 次
+            if now < self._cooldown_until:
+                return
             self._consec_ok = 0
             self._consec_throttle += 1
-            # 降低全局 QPS
-            self._interval = min(self._max_interval, self._interval * (1.5 if severe else 1.25))
-            # 全局冷却：优先尊重服务端 Retry-After，否则指数退避
+            self.throttle_hits += 1
+            self._interval = min(self._max_interval, self._interval * (1.35 if severe else 1.15))
             if retry_after and retry_after > 0:
-                cool = min(60.0, retry_after + random.uniform(0.5, 1.5))
+                cool = min(30.0, retry_after + random.uniform(0.3, 1.0))
             else:
-                base = min(25.0, (4.0 if severe else 2.0) * (1.6 ** min(self._consec_throttle - 1, 4)))
-                cool = base + random.uniform(0.3, 1.2)
-            now = time.monotonic()
-            self._cooldown_until = max(self._cooldown_until, now + cool)
+                base = min(12.0, (2.5 if severe else 1.2) * (1.4 ** min(self._consec_throttle - 1, 3)))
+                cool = base + random.uniform(0.2, 0.8)
+            self._cooldown_until = now + cool
 
 
 def get_session() -> requests.Session:
@@ -931,7 +939,7 @@ def main():
                     print(
                         f"\r[{r_label}] {done_cnt}/{total} ({done_cnt * 100 / total:.1f}%) | "
                         f"成功: {ok_cnt} | 无图: {notfound_cnt} | 失败: {round_err} | "
-                        f"{speed:.1f} 张/秒{top_err}   ",
+                        f"{speed:.1f} 张/秒 (上限:{limiter.current_qps:.1f} 退避:{limiter.throttle_hits}){top_err}   ",
                         end="",
                         flush=True,
                     )
