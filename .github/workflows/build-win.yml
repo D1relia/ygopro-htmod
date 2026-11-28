@@ -357,6 +357,16 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v3
 
+        - name: Download cards.zip for offline bridging
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "installer/assets" | Out-Null
+          try {
+            Invoke-WebRequest -Uri "https://ygocdb.com/api/v0/cards.zip" -OutFile "installer/assets/cards.zip" -TimeoutSec 60
+          } catch {
+            Write-Warning "Failed to download cards.zip: $_"
+          }
+
       - name: Build solution
         shell: pwsh
         run: |
