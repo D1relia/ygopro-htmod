@@ -43,7 +43,7 @@ LANG_CONFIG = {
     },
 }
 
-MAX_WORKERS = 8          # 并发线程数（配合全局 QPS 限速，4 线程足够跑满）
+MAX_WORKERS = 16          # 并发线程数（配合全局 QPS 限速，4 线程足够跑满）
 MAX_QPS = 15.0            # 全局每秒最大请求数（稳妥值 6~10，遇限流会自动降速）
 MIN_QPS = 4            # 触发限流后的最低保底速率
 CONNECT_TIMEOUT = 10     # 连接超时（秒）
@@ -136,7 +136,7 @@ class AdaptiveRateLimiter:
 def get_session() -> requests.Session:
     if not hasattr(_thread_local, "session"):
         s = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=4, pool_maxsize=4)
+        adapter = requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=16)
         s.mount("https://", adapter)
         s.mount("http://", adapter)
         s.headers.update({
@@ -324,9 +324,10 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
     cached_md5 = str(cached.get("md5", "")).strip().lower()
     cached_map = cached.get("map") if isinstance(cached.get("map"), dict) else {}
 
+    req_headers = {"Accept": "*/*"}
     remote_md5 = ""
     try:
-        resp = session.get(CARDS_MD5_URL, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+        resp = session.get(CARDS_MD5_URL, headers=req_headers, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
         if resp.ok:
             remote_md5 = resp.text.strip().strip('"').strip("'").lower()
     except Exception:
@@ -335,55 +336,75 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
     if cached_map and (not remote_md5 or remote_md5 == cached_md5):
         return cached_map
 
+    def parse_cards_zip(zip_bytes: bytes) -> dict[str, list[int]]:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+            json_name = next((n for n in zf.namelist() if n.lower().endswith(".json")), None)
+            if not json_name:
+                return {}
+            raw_cards = json.loads(zf.read(json_name).decode("utf-8"))
+        name_map: dict[str, list[int]] = {}
+        name_fields = ("sc_name", "cn_name", "md_name", "nwbbs_n", "cnocg_n", "jp_name")
+        if isinstance(raw_cards, dict):
+            for item in raw_cards.values():
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    official_id = int(item.get("id"))
+                except (TypeError, ValueError):
+                    continue
+                if official_id <= 0:
+                    continue
+                for field in name_fields:
+                    val = item.get(field)
+                    if not isinstance(val, str) or not val:
+                        continue
+                    norm = normalize_name(val)
+                    if not norm:
+                        continue
+                    lst = name_map.setdefault(norm, [])
+                    if official_id not in lst:
+                        lst.append(official_id)
+        return name_map
+
     print("  - 正在更新百鸽卡名映射库 (cards.zip)，用于桥接超先行 9 位卡密...")
+    last_err = ""
     for attempt in range(RETRY_TIMES):
         try:
-            resp = session.get(CARDS_ZIP_URL, timeout=(CONNECT_TIMEOUT, META_TIMEOUT * 2))
-            resp.raise_for_status()
-            with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
-                json_name = next((n for n in zf.namelist() if n.lower().endswith(".json")), None)
-                if not json_name:
-                    break
-                raw_cards = json.loads(zf.read(json_name).decode("utf-8"))
-
-            name_map: dict[str, list[int]] = {}
-            name_fields = ("sc_name", "cn_name", "md_name", "nwbbs_n", "cnocg_n", "jp_name")
-            if isinstance(raw_cards, dict):
-                for item in raw_cards.values():
-                    if not isinstance(item, dict):
-                        continue
-                    raw_id = item.get("id")
-                    try:
-                        official_id = int(raw_id)
-                    except (TypeError, ValueError):
-                        continue
-                    if official_id <= 0:
-                        continue
-                    for field in name_fields:
-                        val = item.get(field)
-                        if not isinstance(val, str) or not val:
-                            continue
-                        norm = normalize_name(val)
-                        if not norm:
-                            continue
-                        lst = name_map.setdefault(norm, [])
-                        if official_id not in lst:
-                            lst.append(official_id)
-
+            with session.get(CARDS_ZIP_URL, headers=req_headers, timeout=(15, 60), stream=True) as resp:
+                resp.raise_for_status()
+                buf = io.BytesIO()
+                for chunk in resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        buf.write(chunk)
+            name_map = parse_cards_zip(buf.getvalue())
             if name_map:
                 save_json(CARDS_MAP_CACHE_PATH, {"md5": remote_md5, "map": name_map})
                 print(f"  - 卡名映射库更新完成，共索引 {len(name_map)} 条卡名")
                 return name_map
-        except Exception:
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+            session = reset_session()
             if attempt < RETRY_TIMES - 1:
-                time.sleep(0.8 * (attempt + 1))
+                time.sleep(1.5 * (attempt + 1))
+
+    # 若在线拉取失败，顺带检查 expansions/ 下是否有手动放入的 cards.zip
+    local_zip = os.path.join(EXPANSIONS_DIR, "cards.zip")
+    if os.path.isfile(local_zip):
+        try:
+            with open(local_zip, "rb") as f:
+                name_map = parse_cards_zip(f.read())
+            if name_map:
+                save_json(CARDS_MAP_CACHE_PATH, {"md5": remote_md5, "map": name_map})
+                print(f"  - 已从本地 expansions/cards.zip 加载卡名映射 ({len(name_map)} 条)")
+                return name_map
+        except Exception:
+            pass
 
     if cached_map:
-        print("  - [提示] cards.zip 拉取失败，继续使用本地缓存映射")
+        print(f"  - [提示] cards.zip 拉取失败 ({last_err})，继续使用本地缓存映射")
         return cached_map
-    print("  - [提示] cards.zip 拉取失败，本次跳过 9 位先行卡名桥接")
+    print(f"  - [提示] cards.zip 拉取失败 ({last_err})，将改用本地数据库卡名进行桥接")
     return {}
-
 
 def fetch_metadata(subdir: str) -> dict[int, str] | None:
     url = f"{CDN_BASE}/{subdir}/metadata"
@@ -510,7 +531,7 @@ def download_and_convert(
                         img = img.resize((MAX_WIDTH, new_h), _RESAMPLE_LANCZOS)
 
                     tmp_path = out_path + ".tmp"
-                    img.save(tmp_path, format="JPEG", quality=JPG_QUALITY, optimize=True)
+                    img.save(tmp_path, format="JPEG", quality=JPG_QUALITY, optimize=False)
                     os.replace(tmp_path, out_path)
 
                 limiter.on_success()
@@ -785,12 +806,25 @@ def main():
     bridged_map: dict[int, int] = {}
     if need_bridge_cids:
         ygocdb_name_map = load_ygocdb_name_map()
-        if ygocdb_name_map:
+        combined_name_map: dict[str, list[int]] = {k: list(v) for k, v in ygocdb_name_map.items()}
+        # 无论 cards.zip 是否拉取成功，都用本地 cdb 的 8 位正式卡名做补充兜底
+        for cid, cnames in id_to_names.items():
+            if cid >= 100000000:
+                continue
+            for raw_name in cnames:
+                norm = normalize_name(raw_name)
+                if not norm:
+                    continue
+                lst = combined_name_map.setdefault(norm, [])
+                if cid not in lst:
+                    lst.append(cid)
+
+        if combined_name_map:
             for local_cid in sorted(need_bridge_cids):
                 matched_remote = None
                 for raw_name in id_to_names.get(local_cid, ()):
                     norm = normalize_name(raw_name)
-                    cand_ids = ygocdb_name_map.get(norm)
+                    cand_ids = combined_name_map.get(norm)
                     if not cand_ids:
                         continue
                     # 优先选择正式 8 位卡密（< 100000000）
