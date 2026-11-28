@@ -1,11 +1,22 @@
+<div align="left">
+
 # YGOPro-HTmod
 
-基于 **YGOPro / KoishiPro** 深度优化的现代视觉与对局体验增强客户端。  
+基于 **YGOPro / KoishiPro** 深度优化的现代视觉与对局体验增强客户端
+
+<p>
+  <a href="https://github.com/D1relia/ygopro-htmod/releases/latest">
+    <img src="https://img.shields.io/badge/点击前往_Releases_下载最新安装包-38BDF8?style=for-the-badge&logo=githubactions&logoColor=white&labelColor=1E293B" alt="立即下载" />
+  </a>
+</p>
+
+</div>
+
 在完整保留经典操作手感与联机兼容性的前提下，采用统一的 **暗色扁平 × 毛玻璃（Glassmorphism）** 视觉语言重构对局界面与核心贴图，面向 1080p / 2K 等高分屏场景打造清爽、护眼、贴合实卡环境的竞技打牌客户端。
 
 安装时可选 **简中卡名替换** / **日文/简中卡图替换**。
 
-> **当前版本：** `v1.0.0`  
+> **当前版本：** `v1.0.1`  
 > **推荐分辨率：** `1920×1080` / `2560×1440`（亦支持 `1280×720`、`1600×900` 预设一键切换）
 
 ---
