@@ -124,12 +124,26 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 	const auto sz = driver->getCurrentRenderTargetSize();
 	if(sz.Width == 0 || sz.Height == 0)
 		return;
+	if(gameConf.modern_ui) {
+		const irr::u32 rgb = color.color & 0x00ffffffu;
+		if(rgb == 0x000000ffu)
+			color = stipple ? irr::video::SColor(255, 56, 189, 248) : irr::video::SColor(255, 224, 242, 254);
+		else if(rgb == 0x00ffff00u)
+			color = stipple ? irr::video::SColor(255, 251, 191, 36) : irr::video::SColor(255, 56, 189, 248);
+		else if(rgb == 0x0000ffffu)
+			color = irr::video::SColor(255, 224, 242, 254);
+		else if(rgb == 0x00ff0000u)
+			color = irr::video::SColor(255, 251, 113, 133);
+		else if(rgb == 0x0000ff00u)
+			color = irr::video::SColor(255, 52, 211, 153);
+	}
 	const irr::f32 hw = sz.Width * 0.5f, hh = sz.Height * 0.5f;
 	const irr::f32 xScale = sz.Width / static_cast<irr::f32>(GAME_WINDOW_WIDTH);
 	const irr::f32 yScale = sz.Height / static_cast<irr::f32>(GAME_WINDOW_HEIGHT);
 	const irr::f32 pixelScale = (xScale < yScale) ? xScale : yScale;
 	constexpr irr::f32 kSelectionLineHalfThicknessScale = 0.2f; // screen-pixel scaling factor for selection outline thickness
-	const irr::f32 halfThick = matManager.mOutLine.Thickness * pixelScale * kSelectionLineHalfThicknessScale;
+	const irr::f32 thickMul = (gameConf.modern_ui && !stipple) ? 1.35f : 1.0f;
+	const irr::f32 halfThick = matManager.mOutLine.Thickness * pixelScale * kSelectionLineHalfThicknessScale * thickMul;
 	if(halfThick <= 0.0f)
 		return;
 	irr::core::matrix4 invPv;
@@ -200,7 +214,13 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			outIndices[i] = base + idx[i];
 		return true;
 	};
-	driver->setMaterial(matManager.mOutLine);
+	if(gameConf.modern_ui) {
+		irr::video::SMaterial outlineMat = matManager.mOutLine;
+		outlineMat.ZWriteEnable = irr::video::EZW_OFF;
+		driver->setMaterial(outlineMat);
+	} else {
+		driver->setMaterial(matManager.mOutLine);
+	}
 	driver->setTransform(irr::video::ETS_WORLD, irr::core::matrix4());
 	const auto drawFixedSegments = [&](const auto& getSegment) {
 		irr::video::S3DVertex vertices[4 * THICK_LINE_VERTICES_PER_SEGMENT];
@@ -221,7 +241,7 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 			    indices, static_cast<irr::u32>(indexCount / 3),
 			    irr::video::EVT_STANDARD, irr::scene::EPT_TRIANGLES);
 	};
-	if(!stipple) {
+	if(!stipple || gameConf.modern_ui) {
 		drawFixedSegments([&](int i, ProjectedPoint& ps, ProjectedPoint& pe) {
 			return projectPoint(wp[edgeStart[i]], ps) && projectPoint(wp[edgeEnd[i]], pe);
 		});
@@ -281,8 +301,6 @@ void Game::DrawSelectionLine(irr::video::S3DVertex* vec, bool stipple, irr::vide
 				indices.resize(oldIndexCount);
 			}
 		};
-		// Project edge endpoints to screen space to get pixel length for pattern tiling.
-		// (1 pattern bit = 1 screen pixel, matching the original GL stipple behaviour.)
 		irr::f32 patternCursor = 0.0f;
 		for(int i = 0; i < 4; ++i) {
 			const auto& edge = projectedEdges[i];
@@ -319,6 +337,21 @@ void Game::DrawSelectionLine(irr::gui::IGUIElement* element, int width, irr::vid
 	irr::s32 x2 = pos.LowerRightCorner.X;
 	irr::s32 y1 = pos.UpperLeftCorner.Y;
 	irr::s32 y2 = pos.LowerRightCorner.Y;
+	if(gameConf.modern_ui) {
+		const irr::u32 rgb = color.color & 0x00ffffffu;
+		if(rgb == 0x00ffff00u)
+			color = irr::video::SColor(255, 251, 191, 36);
+		else if(rgb == 0x000000ffu || rgb == 0x0000ffffu)
+			color = irr::video::SColor(255, 56, 189, 248);
+		else if(rgb == 0x00ff0000u)
+			color = irr::video::SColor(255, 251, 113, 133);
+		irr::s32 bw = std::max<irr::s32>(2, width);
+		driver->draw2DRectangle(color, irr::core::recti(x1 - bw, y1 - bw, x2 + bw, y1));
+		driver->draw2DRectangle(color, irr::core::recti(x1 - bw, y2, x2 + bw, y2 + bw));
+		driver->draw2DRectangle(color, irr::core::recti(x1 - bw, y1, x1, y2));
+		driver->draw2DRectangle(color, irr::core::recti(x2, y1, x2 + bw, y2));
+		return;
+	}
 	irr::s32 w = pos.getWidth();
 	irr::s32 h = pos.getHeight();
 	if(linePattern < 15) {
@@ -395,25 +428,51 @@ void Game::DrawBackGround() {
 	//select field
 	driver->setMaterial(matManager.mOutLine);
 	if(dInfo.curMsg == MSG_SELECT_PLACE || dInfo.curMsg == MSG_SELECT_DISFIELD || dInfo.curMsg == MSG_HINT) {
+		const bool isDisfield = (dInfo.curMsg == MSG_SELECT_DISFIELD);
+		const irr::video::SColor lineBase = (gameConf.modern_ui && isDisfield)
+			? irr::video::SColor(255, 251, 113, 133)
+			: irr::video::SColor(0xff0000ff);
+		auto drawZoneSelect = [&](irr::video::S3DVertex* zoneVerts, bool isSelected) {
+			if(gameConf.modern_ui) {
+				irr::video::S3DVertex fillVerts[4];
+				const irr::u32 fillAlpha = isSelected ? 92u : 44u;
+				const irr::video::SColor fillCol = isDisfield
+					? irr::video::SColor(fillAlpha, 251, 113, 133)
+					: (isSelected ? irr::video::SColor(fillAlpha, 186, 230, 253) : irr::video::SColor(fillAlpha, 56, 189, 248));
+				for(int k = 0; k < 4; ++k) {
+					fillVerts[k] = zoneVerts[k];
+					fillVerts[k].Pos.Z += 0.005f;
+					fillVerts[k].Color = fillCol;
+				}
+				irr::video::SMaterial fillMat;
+				fillMat.Lighting = false;
+				fillMat.ZWriteEnable = irr::video::EZW_OFF;
+				fillMat.MaterialType = irr::video::EMT_TRANSPARENT_VERTEX_ALPHA;
+				driver->setMaterial(fillMat);
+				driver->drawVertexPrimitiveList(fillVerts, 4, matManager.iRectangle, 2);
+				driver->setMaterial(matManager.mOutLine);
+			}
+			DrawSelectionLine(zoneVerts, !isSelected, lineBase);
+		};
 		unsigned int filter = 0x1;
 		for (int i = 0; i < 7; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				DrawSelectionLine(matManager.vFieldMzone[0][i], !(dField.selected_field & filter), 0xff0000ff);
+				drawZoneSelect(matManager.vFieldMzone[0][i], (dField.selected_field & filter) != 0);
 		}
 		filter = 0x100;
 		for (int i = 0; i < 8; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				DrawSelectionLine(matManager.vFieldSzone[0][i][rule], !(dField.selected_field & filter), 0xff0000ff);
+				drawZoneSelect(matManager.vFieldSzone[0][i][rule], (dField.selected_field & filter) != 0);
 		}
 		filter = 0x10000;
 		for (int i = 0; i < 7; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				DrawSelectionLine(matManager.vFieldMzone[1][i], !(dField.selected_field & filter), 0xff0000ff);
+				drawZoneSelect(matManager.vFieldMzone[1][i], (dField.selected_field & filter) != 0);
 		}
 		filter = 0x1000000;
 		for (int i = 0; i < 8; ++i, filter <<= 1) {
 			if (dField.selectable_field & filter)
-				DrawSelectionLine(matManager.vFieldSzone[1][i][rule], !(dField.selected_field & filter), 0xff0000ff);
+				drawZoneSelect(matManager.vFieldSzone[1][i][rule], (dField.selected_field & filter) != 0);
 		}
 	}
 	//disabled field
@@ -453,6 +512,8 @@ void Game::DrawBackGround() {
 	if (dField.hovered_location != 0 && dField.hovered_location != 2 && dField.hovered_location != POSITION_HINT
 		&& !(dInfo.duel_rule < 4 && dField.hovered_location == LOCATION_MZONE && dField.hovered_sequence > 4)
 		&& !(dInfo.duel_rule >= 4 && dField.hovered_location == LOCATION_SZONE && dField.hovered_sequence > 5)) {
+		if(gameConf.modern_ui)
+			matManager.mSelField.DiffuseColor = 84u << 24;
 		irr::video::S3DVertex* vertex = 0;
 		if (dField.hovered_location == LOCATION_DECK)
 			vertex = matManager.vFieldDeck[dField.hovered_controler];
@@ -462,8 +523,7 @@ void Game::DrawBackGround() {
 			if(pcard && pcard->type & TYPE_LINK) {
 				DrawLinkedZones(pcard);
 			}
-		} else if (dField.hovered_location == LOCATION_SZONE)
-		{
+		} else if (dField.hovered_location == LOCATION_SZONE) {
 			vertex = matManager.vFieldSzone[dField.hovered_controler][dField.hovered_sequence][rule];
 			ClientCard* pcard = dField.szone[dField.hovered_controler][dField.hovered_sequence];
 			if(pcard && pcard->link_marker) {
@@ -476,17 +536,22 @@ void Game::DrawBackGround() {
 			vertex = matManager.vFieldRemove[dField.hovered_controler][rule];
 		else if (dField.hovered_location == LOCATION_EXTRA)
 			vertex = matManager.vFieldExtra[dField.hovered_controler];
-		selFieldAlpha += selFieldDAlpha;
-		if (selFieldAlpha <= 5) {
-			selFieldAlpha = 5;
-			selFieldDAlpha = 10;
+		if(gameConf.modern_ui) {
+			matManager.mSelField.AmbientColor = 0xffbae6fd;
+			matManager.mSelField.DiffuseColor = 84u << 24;
+		} else {
+			selFieldAlpha += selFieldDAlpha;
+			if (selFieldAlpha <= 5) {
+				selFieldAlpha = 5;
+				selFieldDAlpha = 10;
+			}
+			if (selFieldAlpha >= 205) {
+				selFieldAlpha = 205;
+				selFieldDAlpha = -10;
+			}
+			matManager.mSelField.AmbientColor = 0xffffffff;
+			matManager.mSelField.DiffuseColor = (irr::u32)selFieldAlpha << 24;
 		}
-		if (selFieldAlpha >= 205) {
-			selFieldAlpha = 205;
-			selFieldDAlpha = -10;
-		}
-		matManager.mSelField.AmbientColor = 0xffffffff;
-		matManager.mSelField.DiffuseColor = (irr::u32)selFieldAlpha << 24;
 		driver->setMaterial(matManager.mSelField);
 		driver->drawVertexPrimitiveList(vertex, 4, matManager.iRectangle, 2);
 	}
@@ -791,16 +856,38 @@ void Game::DrawMisc() {
 		for(size_t i = 0; i < dField.chains.size(); ++i) {
 			if(dField.chains[i].solved)
 				break;
-			matManager.mTRTexture.setTexture(0, imageManager.tChain);
-			matManager.mTRTexture.AmbientColor = 0xffffff00;
-			ic.setRotationRadians(act_rot);
+			const bool isSelf = (dField.chains[i].controler == 0);
+			const bool isTopChain = (i + 1 == dField.chains.size() || dField.chains[i + 1].solved);
+			const irr::f32 chainScale = gameConf.modern_ui ? (isTopChain ? 1.08f : 0.98f) : 1.0f;
+			const irr::f32 numScale = gameConf.modern_ui ? (isTopChain ? 0.64f : 0.59f) : 0.6f;
+
+			const irr::video::SColor chainCol = gameConf.modern_ui
+				? (isSelf
+					? (isTopChain ? irr::video::SColor(255, 125, 211, 252) : irr::video::SColor(255, 56, 189, 248))
+					: (isTopChain ? irr::video::SColor(255, 253, 164, 175) : irr::video::SColor(255, 251, 113, 133)))
+				: irr::video::SColor(0xffffff00);
+			const irr::video::SColor numCol = gameConf.modern_ui
+				? (isSelf ? irr::video::SColor(255, 240, 249, 255) : irr::video::SColor(255, 255, 241, 242))
+				: irr::video::SColor(0xffffff00);
+
+			irr::core::matrix4 rotMat, scaleMat;
+			rotMat.setRotationRadians(act_rot);
+			scaleMat.setScale(irr::core::vector3df(chainScale, chainScale, 1.0f));
+			ic = rotMat * scaleMat;
 			ic.setTranslation(dField.chains[i].chain_pos);
+			matManager.mTRTexture.setTexture(0, imageManager.tChain);
+			matManager.mTRTexture.AmbientColor = chainCol;
 			driver->setMaterial(matManager.mTRTexture);
 			driver->setTransform(irr::video::ETS_WORLD, ic);
 			driver->drawVertexPrimitiveList(matManager.vSymbol, 4, matManager.iRectangle, 2);
-			it.setScale(0.6f);
-			it.setTranslation(dField.chains[i].chain_pos);
+
+			irr::core::vector3df numPos = dField.chains[i].chain_pos;
+			numPos.Z += 0.01f;
+			it.makeIdentity();
+			it.setScale(irr::core::vector3df(numScale, numScale, 1.0f));
+			it.setTranslation(numPos);
 			matManager.mTRTexture.setTexture(0, imageManager.tNumber);
+			matManager.mTRTexture.AmbientColor = numCol;
 			matManager.vChainNum[0].TCoords = irr::core::vector2df(0.19375f * (i % 5), 0.2421875f * (i / 5));
 			matManager.vChainNum[1].TCoords = irr::core::vector2df(0.19375f * (i % 5 + 1), 0.2421875f * (i / 5));
 			matManager.vChainNum[2].TCoords = irr::core::vector2df(0.19375f * (i % 5), 0.2421875f * (i / 5 + 1));
@@ -809,6 +896,7 @@ void Game::DrawMisc() {
 			driver->setTransform(irr::video::ETS_WORLD, it);
 			driver->drawVertexPrimitiveList(matManager.vChainNum, 4, matManager.iRectangle, 2);
 		}
+		matManager.mTRTexture.AmbientColor = 0xffffffff;
 	}
 	if(dField.cant_check_grave) {
 		matManager.mTexture.setTexture(0, imageManager.tNegated);
@@ -1163,12 +1251,13 @@ void Game::DrawMisc() {
 		irr::f32 vy = (0.5f - v[1] * invW * 0.5f) * 640.0f;
 		return irr::core::vector2di((int)(vx + 0.5f), (int)(vy + 0.5f));
 	};
-	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text) {
+	auto DrawZoneText = [&](const irr::video::S3DVertex* zone, float zHeight, const std::wstring& text, int yOffset = 0) {
 		if(text.empty())
 			return;
 		float cx = (zone[0].Pos.X + zone[1].Pos.X) * 0.5f;
 		float cy = (zone[0].Pos.Y + zone[2].Pos.Y) * 0.5f;
 		auto pt = ProjectToVirtual(irr::core::vector3df(cx, cy, zHeight));
+		pt.Y += yOffset;
 		irr::core::recti center = Resize(pt.X, pt.Y, pt.X, pt.Y);
 		irr::s32 sx = center.UpperLeftCorner.X;
 		irr::s32 sy = center.UpperLeftCorner.Y;
@@ -1285,20 +1374,32 @@ void Game::DrawMisc() {
 		if(pcard && (pcard->type & TYPE_PENDULUM) && !pcard->equipTarget)
 			DrawScaleText(matManager.vFieldSzone[1][4][rule], pcard->rscstring, true);
 	}
+	auto hasChainAt = [&](int player, int loc) -> bool {
+		if(!(dField.chains.size() > 1 || gameConf.draw_single_chain))
+			return false;
+		for(size_t i = 0; i < dField.chains.size(); ++i) {
+			if(dField.chains[i].solved)
+				break;
+			if(dField.chains[i].controler == player && dField.chains[i].location == loc)
+				return true;
+		}
+		return false;
+	};
 	for(int p = 0; p < 2; ++p) {
+		const int chainShift = (p == 0) ? 26 : -24;
 		if(dField.extra[p].size()) {
 			wchar_t extraStr[32];
 			myswprintf(extraStr, L"%d (%d)", (int)dField.extra[p].size(), dField.extra_p_count[p]);
-			DrawZoneText(matManager.vFieldExtra[p], dField.extra[p].size() * 0.01f + 0.03f, extraStr);
+			DrawZoneText(matManager.vFieldExtra[p], dField.extra[p].size() * 0.01f + 0.03f, extraStr, hasChainAt(p, LOCATION_EXTRA) ? chainShift : 0);
 		}
 		if(dField.deck[p].size()) {
-			DrawZoneText(matManager.vFieldDeck[p], dField.deck[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.deck[p].size()));
+			DrawZoneText(matManager.vFieldDeck[p], dField.deck[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.deck[p].size()), hasChainAt(p, LOCATION_DECK) ? chainShift : 0);
 		}
 		if(dField.grave[p].size()) {
-			DrawZoneText(matManager.vFieldGrave[p][rule], dField.grave[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.grave[p].size()));
+			DrawZoneText(matManager.vFieldGrave[p][rule], dField.grave[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.grave[p].size()), hasChainAt(p, LOCATION_GRAVE) ? chainShift : 0);
 		}
 		if(dField.remove[p].size()) {
-			DrawZoneText(matManager.vFieldRemove[p][rule], dField.remove[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.remove[p].size()));
+			DrawZoneText(matManager.vFieldRemove[p][rule], dField.remove[p].size() * 0.01f + 0.03f, dataManager.GetNumString(dField.remove[p].size()), hasChainAt(p, LOCATION_REMOVED) ? chainShift : 0);
 		}
 	}
 }
@@ -1494,7 +1595,10 @@ void Game::DrawSpec() {
 		}
 		case 3: {
 			driver->draw2DImage(imageManager.GetTexture(showcardcode, true), ResizeCardHint(574, 150), true);
-			driver->draw2DImage(imageManager.tNegated, ResizeCardMid(536 + showcarddif, 141 + showcarddif, 792 - showcarddif, 397 - showcarddif, midx, midy), irr::core::recti(0, 0, 128, 128), 0, 0, true);
+			if(imageManager.tNegated) {
+				auto sz = imageManager.tNegated->getOriginalSize();
+				driver->draw2DImage(imageManager.tNegated, ResizeCardMid(536 + showcarddif, 141 + showcarddif, 792 - showcarddif, 397 - showcarddif, midx, midy), irr::core::recti(0, 0, sz.Width, sz.Height), 0, 0, true);
+			}
 			if(showcarddif < 64)
 				showcarddif += 4;
 			break;
@@ -1525,8 +1629,13 @@ void Game::DrawSpec() {
 		}
 		case 6: {
 			driver->draw2DImage(imageManager.GetTexture(showcardcode, true), ResizeCardHint(574, 150), true);
-			driver->draw2DImage(imageManager.tNumber, ResizeCardMid(536 + showcarddif, 141 + showcarddif, 792 - showcarddif, 397 - showcarddif, midx, midy),
-			                    irr::core::recti((showcardp % 5) * 64, (showcardp / 5) * 64, (showcardp % 5 + 1) * 64, (showcardp / 5 + 1) * 64), 0, 0, true);
+			if(imageManager.tNumber) {
+				auto sz = imageManager.tNumber->getOriginalSize();
+				irr::s32 cw = static_cast<irr::s32>(sz.Width / 5);
+				irr::s32 ch = static_cast<irr::s32>(sz.Height / 4);
+				driver->draw2DImage(imageManager.tNumber, ResizeCardMid(536 + showcarddif, 141 + showcarddif, 792 - showcarddif, 397 - showcarddif, midx, midy),
+				                    irr::core::recti((showcardp % 5) * cw, (showcardp / 5) * ch, (showcardp % 5 + 1) * cw, (showcardp / 5 + 1) * ch), 0, 0, true);
+			}
 			if(showcarddif < 64)
 				showcarddif += 4;
 			break;
