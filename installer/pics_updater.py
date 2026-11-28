@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import concurrent.futures
 import glob
 import io
 import json
 import os
+import random
 import re
 import shutil
 import sqlite3
@@ -41,10 +43,13 @@ LANG_CONFIG = {
     },
 }
 
-MAX_WORKERS = 6          # 并发线程数（不建议超过 8）
-TIMEOUT = 12             # 单张下载超时（秒）
+MAX_WORKERS = 4          # 并发线程数（配合全局 QPS 限速，4 线程足够跑满）
+MAX_QPS = 8.0            # 全局每秒最大请求数（稳妥值 6~10，遇限流会自动降速）
+MIN_QPS = 1.5            # 触发限流后的最低保底速率
+CONNECT_TIMEOUT = 10     # 连接超时（秒）
+READ_TIMEOUT = 20        # 读取超时（秒）
 META_TIMEOUT = 20        # metadata / cards.zip 拉取超时（秒）
-RETRY_TIMES = 3          # 失败重试次数
+RETRY_TIMES = 4          # 单张重试次数
 MAX_WIDTH = 400          # 输出 JPG 最大宽度（0 为保留原尺寸）
 JPG_QUALITY = 85         # JPG 压缩质量
 # ========================================================
@@ -67,15 +72,95 @@ _YPK_PIC_RE = re.compile(r"(?:^|/)pics/(\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
 _NAME_CLEAN_RE = re.compile(r"[\s·・•‧･\-－—–_“”「」『』\"'：:，,。\.！!？?（）()【】\[\]~～]+")
 
 
+class AdaptiveRateLimiter:
+    """全局 QPS 节流 + 任一线程遇限流时触发全局冷却，避免多线程续封。"""
+
+    def __init__(self, max_qps: float = MAX_QPS, min_qps: float = MIN_QPS):
+        self._lock = threading.Lock()
+        self._base_interval = 1.0 / max(0.5, max_qps)
+        self._max_interval = 1.0 / max(0.2, min_qps)
+        self._interval = self._base_interval
+        self._next_slot = 0.0
+        self._cooldown_until = 0.0
+        self._consec_ok = 0
+        self._consec_throttle = 0
+        self.stop_event = threading.Event()
+
+    def wait(self) -> bool:
+        while not self.stop_event.is_set():
+            with self._lock:
+                now = time.monotonic()
+                if now < self._cooldown_until:
+                    sleep_for = self._cooldown_until - now
+                elif now < self._next_slot:
+                    sleep_for = self._next_slot - now
+                else:
+                    self._next_slot = now + self._interval
+                    return True
+            self.stop_event.wait(min(sleep_for, 0.5))
+        return False
+
+    def on_success(self) -> None:
+        with self._lock:
+            self._consec_ok += 1
+            self._consec_throttle = 0
+            # 连续成功 25 张后缓慢恢复速率
+            if self._consec_ok >= 25 and self._interval > self._base_interval:
+                self._interval = max(self._base_interval, self._interval * 0.90)
+                self._consec_ok = 0
+
+    def on_throttle(self, retry_after: float | None = None, severe: bool = False) -> None:
+        with self._lock:
+            self._consec_ok = 0
+            self._consec_throttle += 1
+            # 降低全局 QPS
+            self._interval = min(self._max_interval, self._interval * (1.5 if severe else 1.25))
+            # 全局冷却：优先尊重服务端 Retry-After，否则指数退避
+            if retry_after and retry_after > 0:
+                cool = min(60.0, retry_after + random.uniform(0.5, 1.5))
+            else:
+                base = min(25.0, (4.0 if severe else 2.0) * (1.6 ** min(self._consec_throttle - 1, 4)))
+                cool = base + random.uniform(0.3, 1.2)
+            now = time.monotonic()
+            self._cooldown_until = max(self._cooldown_until, now + cool)
+
+
 def get_session() -> requests.Session:
     if not hasattr(_thread_local, "session"):
         s = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=4, pool_maxsize=4)
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
         s.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KoishiPro-HTmod/1.0",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
             "Accept": "image/webp,image/*,*/*;q=0.8",
         })
         _thread_local.session = s
     return _thread_local.session
+
+
+def reset_session() -> requests.Session:
+    old = getattr(_thread_local, "session", None)
+    if old is not None:
+        try:
+            old.close()
+        except Exception:
+            pass
+        delattr(_thread_local, "session")
+    return get_session()
+
+
+def _parse_retry_after(header_val: str | None) -> float | None:
+    if not header_val:
+        return None
+    try:
+        return max(0.0, float(header_val.strip()))
+    except ValueError:
+        return None
 
 
 def normalize_name(name: str) -> str:
@@ -233,7 +318,7 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
 
     remote_md5 = ""
     try:
-        resp = session.get(CARDS_MD5_URL, timeout=TIMEOUT)
+        resp = session.get(CARDS_MD5_URL, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
         if resp.ok:
             remote_md5 = resp.text.strip().strip('"').strip("'").lower()
     except Exception:
@@ -245,7 +330,7 @@ def load_ygocdb_name_map() -> dict[str, list[int]]:
     print("  - 正在更新百鸽卡名映射库 (cards.zip)，用于桥接超先行 9 位卡密...")
     for attempt in range(RETRY_TIMES):
         try:
-            resp = session.get(CARDS_ZIP_URL, timeout=META_TIMEOUT * 2)
+            resp = session.get(CARDS_ZIP_URL, timeout=(CONNECT_TIMEOUT, META_TIMEOUT * 2))
             resp.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
                 json_name = next((n for n in zf.namelist() if n.lower().endswith(".json")), None)
@@ -297,7 +382,7 @@ def fetch_metadata(subdir: str) -> dict[int, str] | None:
     session = get_session()
     for attempt in range(RETRY_TIMES):
         try:
-            resp = session.get(url, timeout=META_TIMEOUT)
+            resp = session.get(url, timeout=(CONNECT_TIMEOUT, META_TIMEOUT))
             resp.raise_for_status()
             meta: dict[int, str] = {}
             for raw_line in resp.text.splitlines():
@@ -377,23 +462,37 @@ def download_and_convert(
     subdirs: list[str],
     expected_sig: str | None,
     out_dir: str,
-) -> tuple[str, int, str | None]:
+    limiter: AdaptiveRateLimiter,
+) -> tuple[str, int, str | None, str]:
     out_path = os.path.join(out_dir, f"{local_cid}.jpg")
     session = get_session()
     saw_error = False
+    last_err = ""
 
     for subdir in subdirs:
         url = f"{CDN_BASE}/{subdir}/{remote_cid}.webp"
         for attempt in range(RETRY_TIMES):
+            if not limiter.wait():
+                return ("aborted", local_cid, None, "已取消")
             try:
-                resp = session.get(url, timeout=TIMEOUT)
-                if resp.status_code == 404:
+                resp = session.get(url, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+                code = resp.status_code
+                if code == 404:
                     break
-                if resp.status_code == 429 or resp.status_code >= 500:
+                if code in (403, 429) or code >= 500:
                     saw_error = True
-                    time.sleep(0.8 * (attempt + 1))
+                    last_err = f"HTTP {code}"
+                    ra = _parse_retry_after(resp.headers.get("Retry-After"))
+                    limiter.on_throttle(retry_after=ra, severe=(code in (403, 429)))
                     continue
                 resp.raise_for_status()
+
+                ctype = resp.headers.get("Content-Type", "").lower()
+                if "text/html" in ctype:
+                    saw_error = True
+                    last_err = "WAF/HTML拦截页"
+                    limiter.on_throttle(severe=True)
+                    continue
 
                 with Image.open(io.BytesIO(resp.content)) as img:
                     if img.mode != "RGB":
@@ -405,13 +504,24 @@ def download_and_convert(
                     tmp_path = out_path + ".tmp"
                     img.save(tmp_path, format="JPEG", quality=JPG_QUALITY, optimize=True)
                     os.replace(tmp_path, out_path)
-                return ("ok", local_cid, expected_sig or f"{subdir}:{remote_cid}:direct")
-            except Exception:
-                saw_error = True
-                if attempt < RETRY_TIMES - 1:
-                    time.sleep(0.5 * (attempt + 1))
 
-    return ("err" if saw_error else "404", local_cid, None)
+                limiter.on_success()
+                return ("ok", local_cid, expected_sig or f"{subdir}:{remote_cid}:direct", "")
+            except requests.exceptions.Timeout:
+                saw_error = True
+                last_err = "请求超时"
+                limiter.on_throttle(severe=False)
+            except requests.exceptions.RequestException as e:
+                saw_error = True
+                last_err = type(e).__name__
+                limiter.on_throttle(severe=False)
+                session = reset_session()
+            except Exception as e:
+                saw_error = True
+                last_err = f"解码异常({type(e).__name__})"
+                limiter.on_throttle(severe=False)
+
+    return ("err" if saw_error else "404", local_cid, None, last_err)
 
 
 def merge_cache_into_ypk(cache_dir: str, ypk_path: str) -> tuple[int, int]:
@@ -476,9 +586,7 @@ def sync_super_pre_overrides(
     覆写前自动备份原有散图到 _htmod_pics_backup/，清理时优先还原备份。
     """
     manifest = load_json(OVERRIDE_MANIFEST_PATH)
-    prev_lang = manifest.get("lang", "")
     prev_files = set(manifest.get("files", [])) if isinstance(manifest.get("files"), list) else set()
-    lang_switched = (prev_lang != lang)
 
     ypk_names: set[str] = set()
     if os.path.isfile(ypk_path):
@@ -487,7 +595,7 @@ def sync_super_pre_overrides(
 
     available_override_ids = [cid for cid in sorted(override_ids) if f"pics/{cid}.jpg" in ypk_names]
     desired_names = {f"{cid}.jpg" for cid in available_override_ids}
-    to_remove = (prev_files - desired_names) if not lang_switched else (prev_files - desired_names)
+    to_remove = prev_files - desired_names
 
     removed = 0
     for fn in to_remove:
@@ -759,45 +867,90 @@ def main():
     )
 
     err_cnt = 0
+    err_reasons: Counter[str] = Counter()
     if tasks:
-        ok_cnt = notfound_cnt = done_cnt = 0
-        total = len(tasks)
-        start_ts = time.time()
-        print("开始下载并转码为 JPG（可随时按 Ctrl+C 安全暂停并保存进度）...\n")
+        print("开始下载并转码为 JPG（已启用全局 QPS 限速与撞墙冷却，按 Ctrl+C 可安全暂停并保存进度）...\n")
+        pending = tasks
+        interrupted = False
 
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
-        futures = [
-            executor.submit(download_and_convert, local_cid, remote_cid, subdirs, sig, work_dir)
-            for local_cid, remote_cid, subdirs, sig, _ in tasks
+        # 第 1 轮正常限速拉取；若有失败，冷却后自动降为 2 线程低速补漏一轮
+        rounds = [
+            ("第 1 轮同步", MAX_WORKERS, MAX_QPS, MIN_QPS),
+            ("第 2 轮低速补漏", 2, 3.0, 1.0),
         ]
-        try:
-            for fut in concurrent.futures.as_completed(futures):
-                res, local_cid, sig = fut.result()
-                done_cnt += 1
-                if res == "ok":
-                    ok_cnt += 1
-                    if sig:
-                        local_state[str(local_cid)] = sig
-                        state_dirty = True
-                elif res == "404":
-                    notfound_cnt += 1
-                else:
-                    err_cnt += 1
-                elapsed = max(0.1, time.time() - start_ts)
-                speed = done_cnt / elapsed
-                print(
-                    f"\r进度: {done_cnt}/{total} ({done_cnt * 100 / total:.1f}%) | "
-                    f"成功: {ok_cnt} | 无图: {notfound_cnt} | 失败: {err_cnt} | "
-                    f"{speed:.1f} 张/秒   ",
-                    end="",
-                    flush=True,
-                )
-        except KeyboardInterrupt:
-            print("\n\n[已中断] 正在等待当前线程收尾并保存已下载的卡图...")
-            executor.shutdown(wait=True, cancel_futures=True)
-        else:
-            executor.shutdown(wait=True)
-        print()
+        for r_idx, (r_label, workers, r_max_qps, r_min_qps) in enumerate(rounds):
+            if not pending or interrupted:
+                break
+            if r_idx > 0:
+                print(f"\n[自动补漏] 等待 8 秒冷却后，对失败的 {len(pending)} 张进行低速重试...")
+                try:
+                    time.sleep(8)
+                except KeyboardInterrupt:
+                    interrupted = True
+                    break
+
+            limiter = AdaptiveRateLimiter(max_qps=r_max_qps, min_qps=r_min_qps)
+            ok_cnt = notfound_cnt = round_err = done_cnt = 0
+            failed_next: list[tuple[int, int, list[str], str | None, bool]] = []
+            task_by_cid = {t[0]: t for t in pending}
+            total = len(pending)
+            start_ts = time.time()
+            round_reasons: Counter[str] = Counter()
+
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+            futures = [
+                executor.submit(download_and_convert, local_cid, remote_cid, subdirs, sig, work_dir, limiter)
+                for local_cid, remote_cid, subdirs, sig, _ in pending
+            ]
+            try:
+                for fut in concurrent.futures.as_completed(futures):
+                    res, local_cid, sig, reason = fut.result()
+                    if res == "aborted":
+                        continue
+                    done_cnt += 1
+                    if res == "ok":
+                        ok_cnt += 1
+                        if sig:
+                            local_state[str(local_cid)] = sig
+                            state_dirty = True
+                    elif res == "404":
+                        notfound_cnt += 1
+                    else:
+                        round_err += 1
+                        round_reasons[reason or "未知错误"] += 1
+                        failed_next.append(task_by_cid[local_cid])
+
+                    # 每完成 200 张定期落盘，防止直接关窗口丢失状态
+                    if state_dirty and done_cnt % 200 == 0:
+                        save_json(state_path, local_state)
+                        state_dirty = False
+
+                    elapsed = max(0.1, time.time() - start_ts)
+                    speed = done_cnt / elapsed
+                    top_err = f" | 主因:{round_reasons.most_common(1)[0][0]}" if round_reasons else ""
+                    print(
+                        f"\r[{r_label}] {done_cnt}/{total} ({done_cnt * 100 / total:.1f}%) | "
+                        f"成功: {ok_cnt} | 无图: {notfound_cnt} | 失败: {round_err} | "
+                        f"{speed:.1f} 张/秒{top_err}   ",
+                        end="",
+                        flush=True,
+                    )
+            except KeyboardInterrupt:
+                interrupted = True
+                limiter.stop_event.set()
+                print("\n\n[已中断] 正在等待当前线程收尾并保存已下载的卡图...")
+                executor.shutdown(wait=True, cancel_futures=True)
+            else:
+                executor.shutdown(wait=True)
+            print()
+
+            pending = failed_next
+            err_cnt = round_err
+            err_reasons = round_reasons
+
+        if err_reasons:
+            detail = ", ".join(f"{k}×{v}" for k, v in err_reasons.most_common(5))
+            print(f"[失败原因统计] {detail}")
     else:
         print("所有可用卡图均已是最新版本，无需下载。")
 
